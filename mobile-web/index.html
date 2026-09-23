@@ -36,7 +36,7 @@
 <meta name="twitter:description" content="Podcast 逐字稿工具：分角色逐字稿、摘要、心智圖">
 <meta name="twitter:image" content="icons/og-image.png">
 
-<link rel="stylesheet" href="style.css?v=fb4b38f4a866">
+<link rel="stylesheet" href="style.css?v=a0899c67d8c4">
 <script src="config.js"></script>
 </head>
 <body>
@@ -94,7 +94,18 @@
 
 <header class="topbar">
   <button id="btn-back" class="icon-btn" type="button" aria-label="返回" hidden><svg class="icon"><use href="#ic-back"/></svg></button>
-  <h1><a href="#/">podscript</a></h1>
+  <h1 class="brand">
+    <a href="#/">
+      <svg class="brand-mark" viewBox="0 0 32 32" aria-hidden="true">
+        <rect width="32" height="32" rx="8" fill="#0F172A"/>
+        <path d="M 5 9 Q 9 4 13 9 T 21 9 L 27 9" fill="none" stroke="#06B6D4" stroke-width="2.5" stroke-linecap="round"/>
+        <path d="M 5 16 Q 9 11 13 16 T 21 16 L 27 16" fill="none" stroke="#3B82F6" stroke-width="2.5" stroke-linecap="round"/>
+        <path d="M 5 23 Q 9 18 13 23 T 21 23 L 27 23" fill="none" stroke="#EC4899" stroke-width="2.5" stroke-linecap="round"/>
+      </svg>
+      <span class="brand-name">podscript</span>
+      <span class="brand-env">手機</span>
+    </a>
+  </h1>
   <button id="btn-theme" class="icon-btn" type="button" aria-label="切換深色/淺色">
     <svg class="icon" id="theme-icon"><use href="#ic-moon"/></svg>
   </button>
