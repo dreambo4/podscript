@@ -5,8 +5,11 @@ pyannote 只輸出編號（SPEAKER_00…），不知道說話者是誰；
 """
 from __future__ import annotations
 
+import argparse
 import json
 import os
+import subprocess
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -80,6 +83,22 @@ def diarize(
     if target.exists() and not force:
         return load_turns(target)
 
+    # 在子行程執行：torch 的 MPS 快取在推論結束後不會還給系統，
+    # 留在常駐的服務行程裡會與下一集的 whisper 疊加，把記憶體吃光。
+    # 子行程結束時作業系統會完整回收。
+    cmd = [sys.executable, "-m", __name__, str(wav_path), str(target)]
+    if num_speakers:
+        cmd += ["--num-speakers", str(num_speakers)]
+    env = {**os.environ, "PYTHONPATH": str(Path(__file__).resolve().parents[1])}
+    proc = subprocess.run(cmd, capture_output=True, text=True, env=env)
+    if proc.returncode != 0:
+        lines = proc.stderr.strip().splitlines()
+        raise DiarizeError(lines[-1] if lines else f"說話者分離程序異常結束（{proc.returncode}）")
+    return load_turns(target)
+
+
+def _run(wav_path: Path, target: Path, num_speakers: int | None) -> None:
+    """實際執行 pyannote 並寫出 diarize.json，僅在子行程中呼叫。"""
     token = os.environ.get("HUGGINGFACE_TOKEN")
     if not token:
         raise DiarizeError(
@@ -119,7 +138,6 @@ def diarize(
         json.dumps([t.to_dict() for t in turns], ensure_ascii=False, indent=2),
         encoding="utf-8",
     )
-    return turns
 
 
 def load_turns(json_path: Path) -> list[SpeakerTurn]:
@@ -192,3 +210,17 @@ def merge_adjacent(
         else:
             merged.append(seg)
     return merged
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="執行說話者分離（供 diarize() 以子行程呼叫）")
+    parser.add_argument("wav", type=Path)
+    parser.add_argument("output", type=Path)
+    parser.add_argument("--num-speakers", type=int)
+    args = parser.parse_args()
+    try:
+        _run(args.wav, args.output, args.num_speakers)
+    except DiarizeError as exc:
+        # 父行程取 stderr 最後一行作為錯誤訊息。
+        print(exc, file=sys.stderr)
+        sys.exit(1)
