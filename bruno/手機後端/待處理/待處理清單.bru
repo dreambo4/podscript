@@ -1,0 +1,24 @@
+meta {
+  name: 待處理清單
+  type: http
+  seq: 2
+}
+
+get {
+  url: {{mobileBase}}/api/queue?status=pending&limit=100
+  body: none
+  auth: bearer
+}
+
+params:query {
+  status: pending
+  limit: 100
+}
+
+docs {
+  status：pending／done／skipped，all 為全部
+}
+
+auth:bearer {
+  token: {{token}}
+}

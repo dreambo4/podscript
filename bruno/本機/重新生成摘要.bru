@@ -1,0 +1,11 @@
+meta {
+  name: 重新生成摘要
+  type: http
+  seq: 10
+}
+
+post {
+  url: {{localBase}}/api/episodes/{{guid}}/regenerate
+  body: none
+  auth: none
+}

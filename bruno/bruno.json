@@ -1,0 +1,6 @@
+{
+  "version": "1",
+  "name": "podscript",
+  "type": "collection",
+  "ignore": ["node_modules", ".git"]
+}

@@ -1,0 +1,11 @@
+meta {
+  name: 移除待處理
+  type: http
+  seq: 6
+}
+
+delete {
+  url: {{localBase}}/api/queue/{{queueId}}
+  body: none
+  auth: none
+}

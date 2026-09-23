@@ -1,0 +1,15 @@
+meta {
+  name: 標籤清單
+  type: http
+  seq: 2
+}
+
+get {
+  url: {{mobileBase}}/api/tags
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}

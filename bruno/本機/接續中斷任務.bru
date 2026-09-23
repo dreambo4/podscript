@@ -1,0 +1,11 @@
+meta {
+  name: 接續中斷任務
+  type: http
+  seq: 4
+}
+
+post {
+  url: {{localBase}}/api/jobs/{{guid}}/resume
+  body: none
+  auth: none
+}

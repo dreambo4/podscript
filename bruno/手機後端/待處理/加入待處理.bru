@@ -1,0 +1,31 @@
+meta {
+  name: 加入待處理
+  type: http
+  seq: 1
+}
+
+post {
+  url: {{mobileBase}}/api/queue
+  body: json
+  auth: bearer
+}
+
+body:json {
+  {
+    "url": "https://podcasts.apple.com/tw/podcast/...",
+    "note": null
+  }
+}
+
+docs {
+  201：新增成功（同網址已有 pending 時回傳既有那筆）
+  409：這集已經處理過
+}
+
+script:post-response {
+  if (res.status === 201) bru.setEnvVar("queueId", res.body.id);
+}
+
+auth:bearer {
+  token: {{token}}
+}

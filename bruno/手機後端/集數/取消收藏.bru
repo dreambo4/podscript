@@ -1,0 +1,15 @@
+meta {
+  name: 取消收藏
+  type: http
+  seq: 6
+}
+
+delete {
+  url: {{mobileBase}}/api/episodes/{{guid}}/favorite
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}

@@ -1,0 +1,11 @@
+meta {
+  name: 刪除音檔
+  type: http
+  seq: 13
+}
+
+delete {
+  url: {{localBase}}/api/episodes/{{guid}}/audio
+  body: none
+  auth: none
+}

@@ -1,0 +1,15 @@
+meta {
+  name: 收藏此集
+  type: http
+  seq: 5
+}
+
+put {
+  url: {{mobileBase}}/api/episodes/{{guid}}/favorite
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}

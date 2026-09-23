@@ -1,0 +1,15 @@
+meta {
+  name: 移除待處理
+  type: http
+  seq: 3
+}
+
+delete {
+  url: {{mobileBase}}/api/queue/{{queueId}}
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}

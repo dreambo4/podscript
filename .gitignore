@@ -16,3 +16,6 @@ firebase-debug.log
 
 # Claude Code MCP 設定（含 Supabase project_ref），範本見 .mcp.example.json
 .mcp.json
+
+# Bruno 正式環境（含 Railway 網址），範本見 production.example.bru
+bruno/environments/production.bru

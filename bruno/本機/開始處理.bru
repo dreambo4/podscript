@@ -1,0 +1,30 @@
+meta {
+  name: 開始處理
+  type: http
+  seq: 1
+}
+
+post {
+  url: {{localBase}}/api/process
+  body: json
+  auth: none
+}
+
+body:json {
+  {
+    "url": "https://podcasts.apple.com/tw/podcast/...",
+    "force": null,
+    "num_speakers": null,
+    "queue_id": null
+  }
+}
+
+docs {
+  解析網址並在背景開始處理，回傳 job。
+  force：從哪個階段起重跑（download／transcribe／diarize／summarize），之後階段一併重跑。
+  queue_id：由待處理清單觸發時帶入，供回填標題與結案。
+}
+
+script:post-response {
+  if (res.status === 200 && res.body.guid) bru.setEnvVar("guid", res.body.guid);
+}

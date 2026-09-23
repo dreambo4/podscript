@@ -1,0 +1,15 @@
+meta {
+  name: 單集詳細內容
+  type: http
+  seq: 4
+}
+
+get {
+  url: {{mobileBase}}/api/episodes/{{guid}}
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}

@@ -1,0 +1,37 @@
+meta {
+  name: 集數列表
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{mobileBase}}/api/episodes?limit=20&offset=0&sort=created_at&tag_mode=all
+  body: none
+  auth: bearer
+}
+
+params:query {
+  limit: 20
+  offset: 0
+  sort: created_at
+  tag_mode: all
+  ~q: 
+  ~tags: 
+  ~tag: 
+  ~channel: 
+  ~favorites_only: true
+}
+
+docs {
+  sort：created_at／published_at
+  tag_mode：all（須同時包含全部標籤）／any（符合任一）
+  tags 可重複多次，例如 tags=AI&tags=投資
+}
+
+script:post-response {
+  if (res.status === 200 && res.body.length) bru.setEnvVar("guid", res.body[0].episode_guid);
+}
+
+auth:bearer {
+  token: {{token}}
+}

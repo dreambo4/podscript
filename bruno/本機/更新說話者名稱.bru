@@ -1,0 +1,20 @@
+meta {
+  name: 更新說話者名稱
+  type: http
+  seq: 9
+}
+
+put {
+  url: {{localBase}}/api/episodes/{{guid}}/speakers
+  body: json
+  auth: none
+}
+
+body:json {
+  {
+    "speakers": {
+      "SPEAKER_00": "主持人",
+      "SPEAKER_01": "來賓"
+    }
+  }
+}
