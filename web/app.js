@@ -319,6 +319,29 @@ $("btn-upload").addEventListener("click", async (e) => {
   }
 });
 
+// ── 刪除單集 ────────────────────────────────────────
+
+$("btn-delete").addEventListener("click", async (e) => {
+  const uploaded = Boolean(current.uploaded_at);
+  const warning = uploaded
+    ? "資料庫與本機檔案都會刪除，手機端也會看不到，所有人的收藏一併移除。"
+    : "本機檔案（含音檔與轉錄結果）都會刪除。";
+  if (!confirm(`確定要刪除「${current.episode.title}」？\n${warning}\n此動作無法復原。`)) return;
+
+  const btn = e.target;
+  btn.disabled = true;
+  try {
+    await api(`/api/episodes/${current.guid}`, { method: "DELETE" });
+    current = null;
+    location.hash = "";
+    await loadLibrary();
+  } catch (err) {
+    alert(err.message);
+  } finally {
+    btn.disabled = false;
+  }
+});
+
 /** 依上傳與音檔狀態更新中繼資料列與按鈕。 */
 function renderUploadState() {
   const uploaded = Boolean(current.uploaded_at);

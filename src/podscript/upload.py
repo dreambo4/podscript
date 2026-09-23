@@ -111,6 +111,35 @@ def discard_audio(directory: Path) -> dict:
     return {"freed_bytes": _remove_local(directory)}
 
 
+def delete_episode(directory: Path) -> dict:
+    """永久刪除單集：資料庫那一列與本機目錄一併清除。
+
+    收藏由 favorites 的 on delete cascade 連帶刪除。
+    先刪資料庫再刪本機：資料庫失敗時本機檔案仍在，不會兩頭落空。
+
+    Returns:
+        是否刪到資料庫那列，以及釋出的本機空間。
+
+    Raises:
+        UploadError: 資料庫刪除失敗。
+    """
+    deleted = False
+    url = os.environ.get("DATABASE_URL")
+    if url:
+        try:
+            with psycopg.connect(url, connect_timeout=CONNECT_TIMEOUT) as conn:
+                with conn.cursor() as cur:
+                    cur.execute(
+                        "delete from episodes where episode_guid = %s",
+                        (directory.name,),
+                    )
+                    deleted = cur.rowcount > 0
+        except psycopg.Error as exc:
+            raise UploadError(f"刪除資料庫資料失敗：{exc}") from exc
+
+    return {"deleted_db": deleted, "freed_bytes": _remove_local(directory)}
+
+
 def _remove_local(directory: Path) -> int:
     """清除該集的整個本機目錄，回傳釋出的位元組數。
 
@@ -445,10 +474,12 @@ def annotate_queue_item(item_id: str, *, episode_guid: str, title: str) -> None:
 
 
 def resolve_queue_item(episode_guid: str) -> None:
-    """把該集對應的待處理項目標記為已完成。
+    """刪除該集對應的待處理項目。
 
     以 episode_guid 比對而非 id：同一集可能被不同人各貼一次，
     處理完應一併消掉，不留下已無意義的重複項目。
+    直接刪除而非標記 done：已上傳者由 episodes 表擋下重複入列，
+    queue 裡留著結案紀錄沒有用途。
     """
     url = os.environ.get("DATABASE_URL")
     if not url:
@@ -458,8 +489,7 @@ def resolve_queue_item(episode_guid: str) -> None:
         with psycopg.connect(url, connect_timeout=CONNECT_TIMEOUT) as conn:
             with conn.cursor() as cur:
                 cur.execute(
-                    "update queue set status = 'done', processed_at = now()"
-                    " where episode_guid = %s and status = 'pending'",
+                    "delete from queue where episode_guid = %s",
                     (episode_guid,),
                 )
                 conn.commit()

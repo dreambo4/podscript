@@ -245,6 +245,7 @@ button:disabled { opacity: .5; cursor: default; }
 }
 
 .actions { display: flex; gap: 8px; }
+.actions button.danger { color: #a33; }
 
 .block { padding: 20px 0; border-bottom: 1px solid var(--line); }
 .block:last-child { border-bottom: 0; padding-bottom: 0; }

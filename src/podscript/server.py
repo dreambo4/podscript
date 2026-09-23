@@ -430,6 +430,23 @@ def upload_episode(guid: str) -> dict:
     return result
 
 
+@app.delete("/api/episodes/{guid}")
+def delete_episode(guid: str) -> dict:
+    """永久刪除單集（資料庫與本機檔案）。處理中的單集不可刪，否則背景執行緒會把目錄寫回來。"""
+    directory = _episode_dir(guid)
+    job = _read_job(guid)
+    if job is not None and not job.done:
+        raise HTTPException(status_code=409, detail="這集正在處理中，請等處理結束再刪除")
+
+    try:
+        result = upload.delete_episode(directory)
+    except upload.UploadError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    if not result["deleted_db"] and not result["freed_bytes"]:
+        raise HTTPException(status_code=404, detail="查無此單集")
+    return result
+
+
 @app.delete("/api/episodes/{guid}/audio")
 def discard_audio(guid: str) -> dict:
     """刪除音檔釋出空間。僅在已上傳後可用。"""
