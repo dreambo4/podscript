@@ -218,6 +218,51 @@ body {
 
 .list-scroll { position: relative; }
 
+/* ── 下拉刷新 ─────────────────────────────────── */
+/* 整頁滾動（無內部捲動容器），故指示器固定在 topbar 下緣，
+   由 JS 依手指位移調整 transform 與 opacity。 */
+.ptr {
+  position: fixed;
+  top: calc(var(--topbar-h) + env(safe-area-inset-top));
+  left: 0;
+  right: 0;
+  z-index: 9;
+  display: flex;
+  justify-content: center;
+  pointer-events: none;
+  opacity: 0;
+  transform: translateY(-40px);
+}
+
+/* 放手後回彈與淡出要有過渡；跟著手指時由 JS 關掉此 class */
+.ptr.animating { transition: transform .25s, opacity .25s; }
+
+.ptr-spinner {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: var(--card);
+  border: 1px solid var(--line);
+  box-shadow: 0 2px 8px -4px rgba(0, 0, 0, .3);
+  position: relative;
+}
+
+/* 內圈的弧線；到達觸發門檻前隨下拉角度轉動，觸發後持續自轉 */
+.ptr-spinner::after {
+  content: "";
+  position: absolute;
+  inset: 6px;
+  border-radius: 50%;
+  border: 2px solid var(--line);
+  border-top-color: var(--accent);
+}
+
+.ptr.spinning .ptr-spinner::after { animation: spin .8s linear infinite; }
+@media (prefers-reduced-motion: reduce) {
+  .ptr.animating { transition: none; }
+  .ptr.spinning .ptr-spinner::after { animation: none; }
+}
+
 /* ── 待處理區（貼網址暫存，回家在本機端轉錄）──────────── */
 .queue-section {
   border: 1px solid var(--line);

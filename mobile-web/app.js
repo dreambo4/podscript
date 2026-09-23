@@ -415,7 +415,7 @@ async function ensureChannelsLoaded() {
   channelsLoaded = true;
 }
 
-async function loadList() {
+async function loadList({ quiet = false } = {}) {
   const requestId = ++listRequestId;
 
   // 待處理清單與集數列表互不相依，平行拉取，失敗各自處理
@@ -436,12 +436,12 @@ async function loadList() {
   query.set("sort", getSort());
   query.set("limit", 500); // 一次性全拉，見 spec §5.5 未來優化項目
 
-  setListLoading(true);
+  if (!quiet) setListLoading(true);
   let episodes;
   try {
     episodes = await api(`/episodes?${query}`);
   } finally {
-    if (requestId === listRequestId) setListLoading(false);
+    if (!quiet && requestId === listRequestId) setListLoading(false);
   }
 
   // 若期間又觸發了更新的請求，這次結果已過時，不渲染避免畫面閃回舊資料
@@ -658,13 +658,15 @@ document.querySelector("#sheet-apply").addEventListener("click", () => {
 });
 
 // ── 我的收藏 ──────────────────────────────────────
-async function loadFavorites() {
+async function loadFavorites({ quiet = false } = {}) {
   const loading = document.querySelector("#favorites-loading");
   const container = document.querySelector("#favorites-cards");
   const empty = document.querySelector("#favorites-empty");
 
-  loading.hidden = false;
-  container.innerHTML = "";
+  if (!quiet) {
+    loading.hidden = false;
+    container.innerHTML = "";
+  }
   empty.hidden = true;
 
   let episodes;
@@ -673,6 +675,9 @@ async function loadFavorites() {
   } finally {
     loading.hidden = true;
   }
+
+  // 安靜刷新時舊卡片仍在畫面上，取得新資料後才換掉
+  if (quiet) container.innerHTML = "";
 
   if (episodes.length === 0) {
     empty.hidden = false;
@@ -921,6 +926,109 @@ document.querySelector("#btn-logout").addEventListener("click", () => {
 });
 
 route();
+
+// ── 下拉刷新 ──────────────────────────────────────
+// 手機端不輪詢，資料只在載入時抓一次；下拉是使用者主動更新的入口。
+// 整頁滾動，故在 document 上監聽，並只在捲到頂端時才接管手勢。
+const PTR_THRESHOLD = 70;   // 觸發刷新的下拉距離
+const PTR_MAX = 110;        // 指示器最多跟到這裡，再拉也不會更遠
+const PTR_RESISTANCE = .5;  // 阻尼：手指位移打對折，避免一拉就到底
+
+let ptrStartY = null;
+let ptrDistance = 0;
+let ptrRefreshing = false;
+
+function ptrElement() {
+  return document.querySelector("#ptr");
+}
+
+function ptrSetPosition(distance, animating) {
+  const el = ptrElement();
+  el.classList.toggle("animating", animating);
+  if (distance <= 0) {
+    el.style.transform = "translateY(-40px)";
+    el.style.opacity = "0";
+    return;
+  }
+  const clamped = Math.min(distance, PTR_MAX);
+  el.style.transform = `translateY(${clamped - 34}px) rotate(${clamped * 3}deg)`;
+  el.style.opacity = String(Math.min(clamped / PTR_THRESHOLD, 1));
+}
+
+// 可刷新的頁面與其載入函式；詳情頁與登入頁不支援下拉。
+// quiet：下拉已有自己的轉圈指示器，不再顯示頁內的載入狀態。
+function ptrCurrentLoader() {
+  if (!document.querySelector("#list-view").hidden) return () => loadList({ quiet: true });
+  if (!document.querySelector("#favorites-view").hidden) return () => loadFavorites({ quiet: true });
+  if (!document.querySelector("#tags-view").hidden) return () => loadTagsView();
+  return null;
+}
+
+function ptrCanStart() {
+  if (ptrRefreshing) return false;
+  // 篩選 sheet 展開時，下拉是關閉 sheet 的手勢，不該被刷新攔截
+  if (!document.querySelector("#filter-sheet").hidden) return false;
+  if (!getToken()) return false;
+  return window.scrollY <= 0 && ptrCurrentLoader() !== null;
+}
+
+document.addEventListener("touchstart", (e) => {
+  ptrStartY = ptrCanStart() && e.touches.length === 1 ? e.touches[0].clientY : null;
+  ptrDistance = 0;
+}, { passive: true });
+
+document.addEventListener("touchmove", (e) => {
+  if (ptrStartY === null) return;
+
+  const delta = e.touches[0].clientY - ptrStartY;
+  if (delta <= 0) {
+    // 往上滑代表使用者要捲動頁面，放棄這次手勢
+    ptrStartY = null;
+    ptrSetPosition(0, true);
+    return;
+  }
+
+  ptrDistance = delta * PTR_RESISTANCE;
+  ptrSetPosition(ptrDistance, false);
+
+  // 接管手勢後要擋掉瀏覽器自己的彈性捲動，否則畫面會一起被拉開。
+  // 監聽器必須是非被動的才擋得住，故下方註冊時指定 passive: false。
+  if (ptrDistance > 2 && e.cancelable) e.preventDefault();
+}, { passive: false });
+
+async function ptrFinish() {
+  if (ptrStartY === null) return;
+  ptrStartY = null;
+
+  if (ptrDistance < PTR_THRESHOLD) {
+    ptrSetPosition(0, true);
+    return;
+  }
+
+  const loader = ptrCurrentLoader();
+  if (!loader) {
+    ptrSetPosition(0, true);
+    return;
+  }
+
+  ptrRefreshing = true;
+  const el = ptrElement();
+  el.classList.add("spinning");
+  ptrSetPosition(PTR_THRESHOLD, true);
+
+  try {
+    await loader();
+  } catch (err) {
+    console.error(err);
+  } finally {
+    ptrRefreshing = false;
+    el.classList.remove("spinning");
+    ptrSetPosition(0, true);
+  }
+}
+
+document.addEventListener("touchend", ptrFinish, { passive: true });
+document.addEventListener("touchcancel", ptrFinish, { passive: true });
 
 // ── PWA ───────────────────────────────────────────
 // Service Worker 只快取靜態外殼，API 一律走網路（見 sw.js）。

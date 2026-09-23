@@ -1,0 +1,14 @@
+{
+  "projects": {
+    "default": "podscript-bc3d5"
+  },
+  "targets": {
+    "podscript-bc3d5": {
+      "hosting": {
+        "web": [
+          "podscript"
+        ]
+      }
+    }
+  }
+}

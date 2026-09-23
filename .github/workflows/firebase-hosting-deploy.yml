@@ -1,0 +1,46 @@
+name: Deploy frontend to Firebase Hosting
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'mobile-web/**'
+      - 'firebase.json'
+      - '.firebaserc'
+      - '.github/workflows/firebase-hosting-deploy.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: firebase-hosting-live
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # config.js 不進版控（見 .gitignore），改由 Secrets 產生。
+      # 這兩個值前端本來就會暴露，非密鑰，放 Secrets 只為了讓正式值與本機值分離。
+      - name: Generate config.js
+        run: |
+          cat > mobile-web/config.js <<EOF
+          window.PODSCRIPT_API_BASE = "${{ secrets.PODSCRIPT_API_BASE }}";
+          window.PODSCRIPT_GOOGLE_CLIENT_ID = "${{ secrets.PODSCRIPT_GOOGLE_CLIENT_ID }}";
+          EOF
+
+      - name: Fail if secrets are missing
+        run: |
+          grep -q 'PODSCRIPT_API_BASE = "https\?://' mobile-web/config.js \
+            || { echo "::error::secrets.PODSCRIPT_API_BASE 未設定或不是 http(s) 網址"; exit 1; }
+          grep -q 'PODSCRIPT_GOOGLE_CLIENT_ID = ".\+"' mobile-web/config.js \
+            || { echo "::error::secrets.PODSCRIPT_GOOGLE_CLIENT_ID 未設定"; exit 1; }
+
+      - uses: FirebaseExtended/action-hosting-deploy@v0
+        with:
+          repoToken: ${{ secrets.GITHUB_TOKEN }}
+          firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_PODSCRIPT_BC3D5 }}
+          projectId: podscript-bc3d5
+          target: web
+          channelId: live

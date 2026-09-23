@@ -1,0 +1,35 @@
+name: Preview frontend on Firebase Hosting
+
+on:
+  pull_request:
+    paths:
+      - 'mobile-web/**'
+      - 'firebase.json'
+      - '.firebaserc'
+
+# fork 來的 PR 拿不到 Secrets，跳過以免部署出壞掉的預覽。
+jobs:
+  preview:
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    permissions:
+      checks: write
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Generate config.js
+        run: |
+          cat > mobile-web/config.js <<EOF
+          window.PODSCRIPT_API_BASE = "${{ secrets.PODSCRIPT_API_BASE }}";
+          window.PODSCRIPT_GOOGLE_CLIENT_ID = "${{ secrets.PODSCRIPT_GOOGLE_CLIENT_ID }}";
+          EOF
+
+      - uses: FirebaseExtended/action-hosting-deploy@v0
+        with:
+          repoToken: ${{ secrets.GITHUB_TOKEN }}
+          firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_PODSCRIPT_BC3D5 }}
+          projectId: podscript-bc3d5
+          target: web
+          expires: 7d
