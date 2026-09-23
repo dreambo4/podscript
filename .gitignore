@@ -1,0 +1,18 @@
+.env
+venv/
+models/
+audio/
+*.db
+__pycache__/
+.env.local
+.DS_Store
+mobile-web/config.js
+.firebase/
+firebase-debug.log
+
+# 第三方 skill 副本，可用 npx skills add 依 skills-lock.json 重裝
+.agents/skills/
+.claude/skills/
+
+# Claude Code MCP 設定（含 Supabase project_ref），範本見 .mcp.example.json
+.mcp.json

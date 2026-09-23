@@ -1,0 +1,236 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>podscript</title>
+<meta name="description" content="Podcast 逐字稿工具：分角色逐字稿、摘要、心智圖">
+
+<!-- 瀏覽器 favicon：現代瀏覽器吃 SVG，.ico 給舊瀏覽器與書籤相容 -->
+<link rel="icon" type="image/svg+xml" href="favicon.svg">
+<link rel="icon" type="image/x-icon" href="favicon.ico">
+
+<!-- iOS 加到主畫面（不支援 SVG，且會自動加圓角，故用滿版背景版本） -->
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+
+<!-- PWA -->
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#0f1210">
+
+<!-- Open Graph（Facebook／LINE／Discord 等分享預覽卡片）-->
+<meta property="og:title" content="podscript">
+<meta property="og:description" content="Podcast 逐字稿工具：分角色逐字稿、摘要、心智圖">
+<meta property="og:image" content="icons/og-image.png">
+<meta property="og:type" content="website">
+
+<!-- Twitter/X Card -->
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="podscript">
+<meta name="twitter:description" content="Podcast 逐字稿工具：分角色逐字稿、摘要、心智圖">
+<meta name="twitter:image" content="icons/og-image.png">
+
+<link rel="stylesheet" href="style.css?v=9">
+<script src="config.js"></script>
+</head>
+<body>
+
+<svg width="0" height="0" style="position:absolute;overflow:hidden;">
+  <defs>
+    <symbol id="ic-tag" viewBox="0 0 24 24">
+      <path d="M11.6 3H5a2 2 0 0 0-2 2v6.6c0 .53.21 1.04.586 1.414l8.4 8.4a2 2 0 0 0 2.828 0l6.6-6.6a2 2 0 0 0 0-2.828l-8.4-8.4A2 2 0 0 0 11.6 3Z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>
+      <circle cx="8.2" cy="8.2" r="1.4" fill="currentColor"/>
+    </symbol>
+    <symbol id="ic-heart" viewBox="0 0 24 24">
+      <path d="M12 20.2s-7.5-4.53-10-9.24C.4 7.86 2 4.3 5.6 3.7c2.1-.35 4 .66 6.4 3 2.4-2.34 4.3-3.35 6.4-3 3.6.6 5.2 4.16 3.6 7.26-2.5 4.71-10 9.24-10 9.24Z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>
+    </symbol>
+    <symbol id="ic-heart-fill" viewBox="0 0 24 24">
+      <path d="M12 20.2s-7.5-4.53-10-9.24C.4 7.86 2 4.3 5.6 3.7c2.1-.35 4 .66 6.4 3 2.4-2.34 4.3-3.35 6.4-3 3.6.6 5.2 4.16 3.6 7.26-2.5 4.71-10 9.24-10 9.24Z" fill="currentColor"/>
+    </symbol>
+    <symbol id="ic-back" viewBox="0 0 24 24">
+      <path d="M15 5 7 12l8 7" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+    </symbol>
+    <symbol id="ic-filter" viewBox="0 0 24 24">
+      <path d="M4 6h16M7 12h10M10 18h4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+    </symbol>
+    <symbol id="ic-search" viewBox="0 0 24 24">
+      <circle cx="10.5" cy="10.5" r="6.5" fill="none" stroke="currentColor" stroke-width="1.7"/>
+      <path d="m20 20-4.7-4.7" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/>
+    </symbol>
+    <symbol id="ic-mindmap" viewBox="0 0 24 24">
+      <circle cx="5" cy="12" r="2.2" fill="none" stroke="currentColor" stroke-width="1.6"/>
+      <circle cx="17" cy="5.5" r="2.2" fill="none" stroke="currentColor" stroke-width="1.6"/>
+      <circle cx="17" cy="18.5" r="2.2" fill="none" stroke="currentColor" stroke-width="1.6"/>
+      <path d="M7 11l7.5-4.7M7 13l7.5 4.7" stroke="currentColor" stroke-width="1.5"/>
+    </symbol>
+    <symbol id="ic-transcript" viewBox="0 0 24 24">
+      <path d="M5 4.5h11l3 3V19a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V5.5a1 1 0 0 1 1-1Z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>
+      <path d="M8 10h8M8 13.5h8M8 17h5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+    </symbol>
+    <symbol id="ic-close" viewBox="0 0 24 24">
+      <path d="M6 6l12 12M18 6 6 18" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+    </symbol>
+    <symbol id="ic-sun" viewBox="0 0 24 24">
+      <circle cx="12" cy="12" r="4.2" fill="none" stroke="currentColor" stroke-width="1.6"/>
+      <path d="M12 2.5v2.6M12 18.9v2.6M4.6 4.6l1.85 1.85M17.55 17.55l1.85 1.85M2.5 12h2.6M18.9 12h2.6M4.6 19.4l1.85-1.85M17.55 6.45l1.85-1.85" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+    </symbol>
+    <symbol id="ic-moon" viewBox="0 0 24 24">
+      <path d="M20 14.2A8.5 8.5 0 1 1 9.8 4a6.8 6.8 0 0 0 10.2 10.2Z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>
+    </symbol>
+  </defs>
+</svg>
+
+<header class="topbar">
+  <button id="btn-back" class="icon-btn" type="button" aria-label="返回" hidden><svg class="icon"><use href="#ic-back"/></svg></button>
+  <h1><a href="#/">podscript</a></h1>
+  <button id="btn-theme" class="icon-btn" type="button" aria-label="切換深色/淺色">
+    <svg class="icon" id="theme-icon"><use href="#ic-moon"/></svg>
+  </button>
+  <button id="btn-tags-entry" class="icon-btn" type="button" aria-label="標籤總覽" hidden>
+    <svg class="icon"><use href="#ic-tag"/></svg>
+  </button>
+  <button id="btn-favorites-entry" class="icon-btn" type="button" aria-label="我的收藏" hidden>
+    <svg class="icon" id="favorites-entry-icon"><use href="#ic-heart"/></svg>
+  </button>
+  <div id="g_id_signin"></div>
+  <div id="user-info" class="user-info" hidden>
+    <span id="user-name"></span>
+    <button id="btn-logout" type="button">登出</button>
+  </div>
+</header>
+
+<main id="content">
+
+  <section id="login" class="card placeholder">
+    <p>請先登入 Google 帳號才能瀏覽。</p>
+  </section>
+
+  <section id="list-view" class="view" hidden>
+    <div class="filter-row">
+      <div class="search-wrap">
+        <svg class="icon icon-sm search-icon"><use href="#ic-search"/></svg>
+        <input id="search" type="search" placeholder="搜尋標題或內文…">
+      </div>
+      <button id="btn-open-filter" class="filter-btn" type="button" aria-label="篩選與排序">
+        <svg class="icon"><use href="#ic-filter"/></svg>
+        <span id="filter-dot" class="filter-dot" hidden></span>
+      </button>
+    </div>
+
+    <div id="active-filters" class="active-filters" hidden></div>
+
+    <div id="list-scroll" class="list-scroll">
+      <p id="list-loading" class="muted loading-row" hidden><span class="spinner"></span> 載入中…</p>
+      <div id="episode-groups"></div>
+      <p id="list-empty" class="muted" hidden>沒有符合的集數。</p>
+    </div>
+
+    <div id="scrubber" class="scrubber" hidden></div>
+  </section>
+
+  <section id="favorites-view" class="view" hidden>
+    <div id="favorites-scroll" class="list-scroll">
+      <p id="favorites-loading" class="muted loading-row" hidden><span class="spinner"></span> 載入中…</p>
+      <div id="favorites-cards" class="cards"></div>
+      <div id="favorites-empty" class="empty-state" hidden>
+        <svg class="icon icon-lg"><use href="#ic-heart"/></svg>
+        <p>還沒有收藏的集數</p>
+        <p class="muted">在列表或詳情頁點愛心即可加入</p>
+      </div>
+    </div>
+  </section>
+
+  <section id="tags-view" class="view" hidden>
+    <input id="tag-search" type="search" placeholder="搜尋標籤…" class="tag-search">
+
+    <p class="tag-section-label">依熱門程度・點選可複選</p>
+    <div id="tag-cloud" class="tag-cloud"></div>
+
+    <p class="tag-section-label">全部標籤（依字母／筆畫）</p>
+    <div id="tag-list" class="tag-list"></div>
+
+    <div class="tag-bottom-bar">
+      <div class="mode-row">
+        <div class="mode-row-label">
+          <span class="mode-row-title">同時包含所選標籤</span>
+          <span class="mode-row-sub" id="tag-mode-sub">目前：OR（符合任一標籤即列出）</span>
+        </div>
+        <div class="switch" id="tag-mode-switch" role="switch" aria-checked="false"></div>
+      </div>
+      <div class="tag-selected-bar">
+        <span class="count">已選 <span id="tag-selected-count">0</span> 個標籤</span>
+        <button id="tag-apply-btn" class="tag-apply-btn" type="button">套用</button>
+      </div>
+    </div>
+  </section>
+
+  <section id="detail-view" class="view" hidden>
+    <div class="detail-hero">
+      <div>
+        <h2 id="ep-title"></h2>
+        <p class="muted" id="ep-meta"></p>
+      </div>
+      <button id="btn-favorite-detail" class="icon-btn heart-toggle" type="button" aria-label="收藏">
+        <svg class="icon" id="favorite-detail-icon"><use href="#ic-heart"/></svg>
+      </button>
+    </div>
+
+    <div class="subtabbar">
+      <button class="subtab active" data-sub="summary" type="button">摘要／心智圖</button>
+      <button class="subtab" data-sub="transcript" type="button">逐字稿</button>
+    </div>
+
+    <div class="subpanel active" id="sub-summary">
+      <div class="block">
+        <p id="summary-text"></p>
+        <p id="hashtags" class="tags"></p>
+        <div id="mindmap"></div>
+      </div>
+    </div>
+
+    <div class="subpanel" id="sub-transcript">
+      <div class="block">
+        <div id="transcript"></div>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<div id="filter-sheet" class="sheet-wrap" hidden>
+  <div class="sheet">
+    <h3>篩選與排序</h3>
+
+    <div class="sheet-group">
+      <span class="sheet-label">頻道</span>
+      <div id="sheet-channel-chips" class="sheet-chips"></div>
+    </div>
+
+    <div class="sheet-group">
+      <span class="sheet-label">排序依據</span>
+      <div class="sheet-chips">
+        <button type="button" class="sheet-chip" data-sort="created_at">建檔日期</button>
+        <button type="button" class="sheet-chip" data-sort="published_at">發佈日期</button>
+      </div>
+    </div>
+
+    <div class="sheet-group" style="margin-bottom:6px;">
+      <span class="sheet-label">其他</span>
+      <div class="sheet-chips">
+        <button type="button" id="sheet-favorites-only" class="sheet-chip">
+          <svg class="icon icon-xs"><use href="#ic-heart-fill"/></svg> 只看收藏
+        </button>
+      </div>
+    </div>
+
+    <div class="sheet-actions">
+      <button type="button" id="sheet-clear">清除篩選</button>
+      <button type="button" id="sheet-apply" class="primary">套用</button>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+<script src="app.js?v=11"></script>
+<script src="https://accounts.google.com/gsi/client" async defer onload="initGoogleSignIn()"></script>
+</body>
+</html>

@@ -1,0 +1,15 @@
+{
+  "_comment": [
+    "複製為 .mcp.json 並把 <PROJECT_REF> 換成自己的 Supabase 專案 ref。",
+    "取得方式：Supabase 後台 → 選專案 → Project Settings → General → Reference ID，",
+    "或直接看後台網址 https://supabase.com/dashboard/project/<PROJECT_REF> 的最後一段。",
+    "ref 是 20 個小寫英文字母，例如 abcdefghijklmnopqrst。",
+    "ref 本身不是密鑰（存取仍需 access token），但為避免暴露專案識別，.mcp.json 不進版控。"
+  ],
+  "mcpServers": {
+    "supabase": {
+      "type": "http",
+      "url": "https://mcp.supabase.com/mcp?project_ref=<PROJECT_REF>&features=docs%2Cdatabase%2Cdevelopment"
+    }
+  }
+}

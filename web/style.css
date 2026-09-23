@@ -1,0 +1,435 @@
+:root {
+  --bg: #faf9f7;
+  --card: #fff;
+  --ink: #1c1b1a;
+  --muted: #6b6864;
+  --line: #e4e1dc;
+  --accent: #2f6f4f;
+  --warn: #9a7b2e;
+  --topbar-h: 61px;
+
+  /* 心智圖分支色（root 為 --accent，分支 0~6 依序輪替） */
+  --mm-root: var(--accent);
+  --mm-ink: #1c1b1a;
+  --mm-0: #a9c3b3; --mm-1: #b3a9c2; --mm-2: #c2b09a;
+  --mm-3: #94b3ab; --mm-4: #a3a3c9; --mm-5: #c2a08e; --mm-6: #8fb0a0;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font: 15px/1.7 -apple-system, "PingFang TC", "Noto Sans TC", sans-serif;
+}
+
+/* 清單常駐左側，內容在右側切換，任何時候都能換集 */
+.layout {
+  display: grid;
+  grid-template-columns: 280px minmax(0, 1fr);
+  align-items: start;
+}
+
+#content {
+  padding: 20px 20px 64px;
+  min-width: 0;
+}
+
+.sidebar {
+  position: sticky;
+  top: var(--topbar-h);
+  height: calc(100vh - var(--topbar-h));
+  overflow-y: auto;
+  border-right: 1px solid var(--line);
+  background: var(--card);
+  padding: 16px;
+}
+
+.sidebar-head h2 { margin: 0 0 10px; font-size: 14px; color: var(--muted); }
+
+#filter {
+  width: 100%;
+  padding: 7px 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  font: inherit;
+  font-size: 13px;
+  margin-bottom: 4px;
+}
+
+.topbar {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: var(--card);
+  border-bottom: 1px solid var(--line);
+  padding: 12px 16px;
+}
+
+.topbar h1 {
+  margin: 0;
+  font-size: 17px;
+  letter-spacing: .04em;
+  flex: none;
+}
+
+.topbar h1 a { color: inherit; text-decoration: none; }
+
+.icon-btn {
+  display: none;
+  padding: 6px 10px;
+  font-size: 16px;
+  line-height: 1;
+}
+
+.start {
+  display: flex;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+}
+
+.start input {
+  flex: 1;
+  min-width: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  font: inherit;
+}
+
+button {
+  padding: 10px 16px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--card);
+  color: var(--ink);
+  font: inherit;
+  cursor: pointer;
+}
+
+button:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
+button:disabled { opacity: .5; cursor: default; }
+
+.start button {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+.card {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 20px;
+  margin-bottom: 20px;
+  max-width: 860px;
+}
+
+.placeholder {
+  color: var(--muted);
+  text-align: center;
+  padding: 64px 20px;
+}
+
+.placeholder p { margin: 0; line-height: 2; }
+
+.card h2 { margin: 0 0 4px; font-size: 17px; }
+
+.muted { color: var(--muted); font-size: 13px; margin: 0; }
+
+.episode-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+  flex-wrap: wrap;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--line);
+}
+
+.actions { display: flex; gap: 8px; }
+
+.block { padding: 20px 0; border-bottom: 1px solid var(--line); }
+.block:last-child { border-bottom: 0; padding-bottom: 0; }
+
+.block-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+
+.block-head h3 { margin: 0; font-size: 15px; }
+
+/* 心智圖節點多，窄螢幕下橫向捲動比縮到看不清楚好。
+   需要 max-width 限制，否則 svg 的固定寬度會把整個版面推寬。 */
+#mindmap {
+  overflow-x: auto;
+  max-width: 100%;
+  min-height: 200px;
+}
+
+#mindmap svg {
+  display: block;
+  min-width: 860px;   /* 節點多時保持可讀，由容器橫向捲動 */
+  height: auto;
+}
+
+#mindmap svg path.edge {
+  stroke-width: 3px;
+  opacity: 0.55;
+}
+
+/* mindmap 分支色：mermaid base 主題若靠 themeVariables.primaryColor 自動推算，
+   深色系種子會讓所有分支塌陷成同一種近黑色，因此直接指定每個 .section-N。
+   子層 path.node-bkg 的 class 一律是 node-0（mermaid 命名巧合），要靠父層 section-N 限定。 */
+#mindmap .section--1 .node-bkg, #mindmap .section--1 .basic { fill: var(--mm-root) !important; }
+#mindmap .section-0 .node-bkg, #mindmap .section-0 .basic { fill: var(--mm-0) !important; }
+#mindmap .section-1 .node-bkg, #mindmap .section-1 .basic { fill: var(--mm-1) !important; }
+#mindmap .section-2 .node-bkg, #mindmap .section-2 .basic { fill: var(--mm-2) !important; }
+#mindmap .section-3 .node-bkg, #mindmap .section-3 .basic { fill: var(--mm-3) !important; }
+#mindmap .section-4 .node-bkg, #mindmap .section-4 .basic { fill: var(--mm-4) !important; }
+#mindmap .section-5 .node-bkg, #mindmap .section-5 .basic { fill: var(--mm-5) !important; }
+#mindmap .section-6 .node-bkg, #mindmap .section-6 .basic { fill: var(--mm-6) !important; }
+#mindmap .section-edge--1 { stroke: var(--mm-root) !important; }
+#mindmap .section-edge-0 { stroke: var(--mm-0) !important; }
+#mindmap .section-edge-1 { stroke: var(--mm-1) !important; }
+#mindmap .section-edge-2 { stroke: var(--mm-2) !important; }
+#mindmap .section-edge-3 { stroke: var(--mm-3) !important; }
+#mindmap .section-edge-4 { stroke: var(--mm-4) !important; }
+#mindmap .section-edge-5 { stroke: var(--mm-5) !important; }
+#mindmap .section-edge-6 { stroke: var(--mm-6) !important; }
+#mindmap .nodeLabel { color: var(--mm-ink) !important; }
+
+.tags { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0 0; padding: 0; }
+
+.tags span {
+  background: #eef3ef;
+  color: var(--accent);
+  border-radius: 999px;
+  padding: 3px 12px;
+  font-size: 13px;
+}
+
+/* 進度條 */
+.stages { display: flex; gap: 4px; list-style: none; margin: 16px 0 8px; padding: 0; flex-wrap: wrap; }
+
+.stages li {
+  flex: 1;
+  min-width: 72px;
+  text-align: center;
+  font-size: 12px;
+  color: var(--muted);
+  padding-top: 20px;
+  position: relative;
+}
+
+.stages li::before {
+  content: "";
+  position: absolute;
+  top: 4px; left: 50%;
+  width: 10px; height: 10px;
+  margin-left: -5px;
+  border: 2px solid var(--line);
+  border-radius: 50%;
+  background: var(--card);
+}
+
+.stages li.active::before { border-color: var(--accent); background: var(--accent); }
+.stages li.active { color: var(--accent); font-weight: 600; }
+.stages li.past::before { border-color: var(--accent); background: var(--accent); }
+
+/* 進度條：轉錄階段顯示實際百分比，其餘階段以流動條紋表示進行中 */
+.bar {
+  height: 6px;
+  background: var(--line);
+  border-radius: 999px;
+  overflow: hidden;
+  margin: 12px 0;
+}
+
+.bar-fill {
+  height: 100%;
+  width: 0;
+  background: var(--accent);
+  border-radius: 999px;
+  transition: width .4s ease;
+}
+
+.bar-fill.indeterminate {
+  width: 100%;
+  background-image: linear-gradient(
+    90deg,
+    var(--accent) 25%, #6ea98a 25%, #6ea98a 50%,
+    var(--accent) 50%, var(--accent) 75%, #6ea98a 75%
+  );
+  background-size: 28px 100%;
+  animation: flow 1s linear infinite;
+}
+
+@keyframes flow {
+  to { background-position: 28px 0; }
+}
+
+.status { display: flex; align-items: center; gap: 8px; margin: 0; font-size: 14px; }
+
+.spinner {
+  width: 13px;
+  height: 13px;
+  border: 2px solid var(--line);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin .8s linear infinite;
+  flex: none;
+}
+
+.spinner[hidden] { display: none; }
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .spinner, .bar-fill.indeterminate { animation: none; }
+}
+
+.ep-status { color: var(--accent); font-size: 13px; }
+.ep-error { color: var(--warn); font-size: 13px; }
+
+/* 逐字稿 */
+.seg { margin-bottom: 18px; }
+
+.seg-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--muted);
+  margin-bottom: 2px;
+}
+
+.seg-speaker { color: var(--accent); font-weight: 600; }
+.seg-time { font-variant-numeric: tabular-nums; }
+.seg-time:hover { color: var(--accent); cursor: pointer; }
+.seg p { margin: 0; }
+.seg.low p { color: var(--muted); }
+.seg.low .seg-head::after { content: "⚠️ 低信心"; color: var(--warn); }
+
+.speakers { display: flex; gap: 8px; flex-wrap: wrap; }
+.speakers input {
+  width: 8em;
+  padding: 4px 8px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  font: inherit;
+  font-size: 13px;
+}
+
+.episode-list { list-style: none; margin: 8px 0 0; padding: 0; }
+
+.episode-list li {
+  padding: 10px;
+  margin-bottom: 2px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.episode-list li:hover { background: #f2f0ed; }
+
+/* 分區標題：處理中／未上傳／已上傳 */
+.episode-list li.group {
+  padding: 14px 10px 4px;
+  margin: 0;
+  font-size: 11px;
+  letter-spacing: .08em;
+  color: var(--muted);
+  cursor: default;
+  border-radius: 0;
+}
+
+.episode-list li.group:hover { background: none; }
+.episode-list li.group:first-child { padding-top: 4px; }
+.count { opacity: .6; }
+
+.episode-list li.selected {
+  background: #eef3ef;
+  box-shadow: inset 2px 0 0 var(--accent);
+}
+
+.episode-list li.selected .ep-name { color: var(--accent); font-weight: 600; }
+
+.ep-name {
+  display: block;
+  margin-bottom: 2px;
+  /* 標題長，限兩行避免單集列過高 */
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.episode-list .muted, .episode-list .ep-status { font-size: 12px; }
+
+dialog {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 24px;
+  min-width: 260px;
+}
+
+dialog h3 { margin: 0 0 16px; font-size: 16px; }
+dialog label { display: block; margin-bottom: 8px; }
+dialog hr { border: 0; border-top: 1px solid var(--line); margin: 16px 0; }
+dialog menu { display: flex; gap: 8px; justify-content: flex-end; margin: 20px 0 0; padding: 0; }
+
+.error { color: #a33; }
+
+/* 窄螢幕：側邊欄改為覆蓋式抽屜，由 ☰ 開關 */
+@media (max-width: 800px) {
+  .layout { grid-template-columns: minmax(0, 1fr); }
+  .icon-btn { display: block; }
+
+  .sidebar {
+    position: fixed;
+    top: var(--topbar-h);
+    left: 0;
+    width: 280px;
+    max-width: 85vw;
+    z-index: 9;
+    transform: translateX(-100%);
+    transition: transform .2s ease;
+    box-shadow: 0 4px 24px rgba(0, 0, 0, .12);
+  }
+
+  .sidebar.open { transform: none; }
+  #content { padding: 16px; }
+  .topbar h1 { display: none; }
+
+  .block-head { align-items: flex-start; }
+
+  /* ☰ + 輸入框 + 按鈕在窄螢幕排不下，改為兩列 */
+  :root { --topbar-h: 108px; }
+  .topbar { flex-wrap: wrap; padding: 10px 12px; }
+  /* flex-basis:100% 不扣 topbar 的 padding，用 flex-grow 讓它自行填滿 */
+  .start { flex: 1 1 100%; min-width: 0; }
+  .start button { padding: 10px 14px; }
+}
+
+@media print {
+  .topbar, .sidebar, .actions, .block-head button, .speakers, #progress { display: none !important; }
+  body { background: #fff; }
+  .layout { display: block; }
+  #content { padding: 0; }
+  .card { border: 0; padding: 0; max-width: none; }
+  .seg { break-inside: avoid; }
+  #mindmap svg { min-width: 0; max-width: 100%; }
+}

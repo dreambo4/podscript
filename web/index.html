@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>podscript</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header class="topbar">
+  <button id="btn-menu" class="icon-btn" type="button" aria-label="切換清單">☰</button>
+  <h1><a href="#">podscript</a></h1>
+  <form id="start-form" class="start">
+    <input id="url" type="url" placeholder="貼上 Apple Podcast 單集網址…" required>
+    <button type="submit">開始</button>
+  </form>
+</header>
+
+<div class="layout">
+
+  <aside id="sidebar" class="sidebar">
+    <div class="sidebar-head">
+      <h2>單集</h2>
+      <input id="filter" type="search" placeholder="搜尋標題或標籤…">
+    </div>
+    <ul id="episode-list" class="episode-list"></ul>
+  </aside>
+
+  <main id="content">
+
+    <section id="empty" class="card placeholder">
+      <p>貼上 Apple Podcast 單集網址開始，<br>或從左側選擇已處理的單集。</p>
+    </section>
+
+    <section id="progress" class="card" hidden>
+      <h2 id="progress-title"></h2>
+      <ol class="stages" id="stages"></ol>
+      <div class="bar"><div class="bar-fill" id="bar-fill"></div></div>
+      <p class="status">
+        <span class="spinner" id="spinner"></span>
+        <span id="progress-message"></span>
+        <span class="muted" id="progress-elapsed"></span>
+        <button id="btn-resume" type="button" hidden>▶ 繼續處理</button>
+      </p>
+    </section>
+
+    <section id="episode" class="card" hidden>
+      <div class="episode-head">
+        <div>
+          <h2 id="ep-title"></h2>
+          <p class="muted" id="ep-meta"></p>
+        </div>
+        <div class="actions">
+          <button id="btn-download" type="button">⬇ 下載</button>
+          <button id="btn-upload" type="button">☁ 上傳</button>
+        </div>
+      </div>
+
+      <div class="block">
+        <div class="block-head">
+          <h3>📝 摘要 · 心智圖 · 標籤</h3>
+          <button id="btn-regen" type="button">🔄 重新生成全部</button>
+        </div>
+        <p id="summary-text"></p>
+        <p id="hashtags" class="tags"></p>
+      </div>
+
+      <div class="block">
+        <div class="block-head">
+          <h3>🧠 心智圖</h3>
+        </div>
+        <div id="mindmap"></div>
+      </div>
+
+      <div class="block">
+        <div class="block-head">
+          <h3>💬 逐字稿</h3>
+          <div id="speaker-controls" class="speakers"></div>
+        </div>
+        <div id="transcript"></div>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<dialog id="download-dialog">
+  <form method="dialog">
+    <h3>下載</h3>
+    <label><input type="checkbox" name="part" value="summary" checked> 摘要</label>
+    <label><input type="checkbox" name="part" value="mindmap" checked> 心智圖</label>
+    <label><input type="checkbox" name="part" value="transcript" checked> 逐字稿</label>
+    <hr>
+    <label><input type="radio" name="format" value="md" checked> Markdown</label>
+    <label><input type="radio" name="format" value="pdf"> PDF</label>
+    <menu>
+      <button value="cancel">取消</button>
+      <button id="btn-do-download" value="ok" type="button">下載</button>
+    </menu>
+  </form>
+</dialog>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
