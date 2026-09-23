@@ -389,7 +389,7 @@ button:disabled { opacity: .5; cursor: default; }
 .seg-time:hover { color: var(--accent); cursor: pointer; }
 .seg p { margin: 0; }
 .seg.low p { color: var(--muted); }
-.seg.low .seg-head::after { content: "⚠️ 低信心"; color: var(--warn); }
+.seg.low .seg-head::after { content: "低信心"; color: var(--warn); }
 
 .speakers { display: flex; gap: 8px; flex-wrap: wrap; }
 .speakers input {

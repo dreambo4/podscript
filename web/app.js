@@ -286,7 +286,7 @@ $("btn-regen").addEventListener("click", async (e) => {
     alert(err.message);
   } finally {
     btn.disabled = false;
-    btn.textContent = "🔄 重新生成全部";
+    btn.textContent = "重新生成全部";
   }
 });
 
@@ -309,7 +309,7 @@ $("btn-upload").addEventListener("click", async (e) => {
     const freed = res.freed_bytes
       ? `，釋出 ${(res.freed_bytes / 1048576).toFixed(0)} MB`
       : "";
-    btn.textContent = `✅ ${res.inserted ? "已上傳" : "已更新"}${freed}`;
+    btn.textContent = `${res.inserted ? "已上傳" : "已更新"}${freed}`;
     setTimeout(renderUploadState, 3000);
   } catch (err) {
     alert(err.message);
@@ -352,12 +352,12 @@ function renderUploadState() {
       ? `${Math.round(current.episode.duration_sec / 60)} 分鐘`
       : "",
     current.provenance?.transcribe_model,
-    uploaded ? `☁ 已上傳 ${current.uploaded_at.slice(0, 10)}` : "尚未上傳",
+    uploaded ? `已上傳 ${current.uploaded_at.slice(0, 10)}` : "尚未上傳",
     current.has_audio === false ? "音檔已刪除" : "",
   ].filter(Boolean);
   $("ep-meta").textContent = meta.join(" · ");
 
-  $("btn-upload").textContent = uploaded ? "☁ 再次上傳" : "☁ 上傳";
+  $("btn-upload").textContent = uploaded ? "再次上傳" : "上傳";
 }
 
 // ── 下載 ────────────────────────────────────────────
@@ -565,7 +565,7 @@ function episodeRow(e, selected) {
     : `<span class="${e.error ? "ep-error" : "muted"}">${[
         (e.published_at || "").slice(0, 10),
         e.error
-          ? "⚠️ 未完成，點擊繼續"
+          ? "未完成，點擊繼續"
           : !e.has_summary
             ? "未生成摘要"
             : !e.has_audio

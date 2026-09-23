@@ -26,6 +26,11 @@ Podcast 逐字稿工具：貼 Apple Podcast 網址 → 分人逐字稿 + 摘要 
 - mp3 保留不自動刪
 - PDF 用瀏覽器列印樣式
 
+## 禁止使用 emoji
+介面文字、程式碼、註解、文件、commit 訊息一律不用 emoji。
+需要圖示時用 SVG（手機端見 `mobile-web/index.html` 的 `<symbol>`）；
+→ ☰ 這類箭頭／選單符號不算 emoji，可以用。
+
 ## 第一步：兩組實測（spec §9）
 1. **§9.1** large-v2 vs large-v3（語音辨識品質）
 2. **§9.2** Haiku vs Sonnet（摘要／心智圖品質）
@@ -43,8 +48,8 @@ venv 獨立於 `~/Project/podscript/venv`，**不要動** `~/Project/markitdown/
 ## Supabase 分工約定（重要）
 **Claude 只能 CRUD 資料，不能 DDL。**
 
-- ✅ Claude 可做：`SELECT` / `INSERT` / `UPDATE` / `DELETE`、查 schema、讀 log、除錯
-- ❌ Claude 不可做：`CREATE TABLE` / `DROP TABLE` / `ALTER TABLE` / `TRUNCATE`、
+- 可做：`SELECT` / `INSERT` / `UPDATE` / `DELETE`、查 schema、讀 log、除錯
+- 不可做：`CREATE TABLE` / `DROP TABLE` / `ALTER TABLE` / `TRUNCATE`、
   建刪 index、改 RLS policy、改 migration —— **一律由使用者本人執行**
 
 需要動結構時，Claude 只**提供 SQL 讓使用者自己貼上執行**，不透過 MCP 下 DDL。
