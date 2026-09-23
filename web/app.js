@@ -12,19 +12,8 @@ const $ = (id) => document.getElementById(id);
 let current = null;
 let audioEl = null;
 
-// 分支色不透過 themeVariables 的 primaryColor 自動推算（該推算以 primaryColor
-// 明度為基準，深色系種子會讓所有分支色階塌陷成同一種近黑色），
-// 改用 CSS 直接指定 mermaid 產生的 .section-N / .section-edge-N，見 style.css。
-// maxNodeWidth 縮窄節點寬度換取分支間距，避免節點多時彼此交疊。
-mermaid.initialize({
-  startOnLoad: false,
-  theme: "base",
-  themeVariables: {
-    fontFamily: '"PingFang TC", "Noto Sans TC", "Microsoft JhengHei", sans-serif',
-  },
-  mindmap: { padding: 16, maxNodeWidth: 120 },
-  fontSize: 14,
-});
+// 心智圖改用 markmap 渲染（見 mindmap-render.js），透過 window.renderMindmap 呼叫。
+// 資料仍存 mermaid 語法，由該模組轉譯，故此處不再需要 mermaid.initialize。
 
 // ── 開始處理 ────────────────────────────────────────
 
@@ -210,15 +199,15 @@ function renderSummary(summary) {
   renderMindmap(summary.mindmap);
 }
 
-async function renderMindmap(code) {
+function renderMindmap(code) {
   const box = $("mindmap");
-  if (!code) {
-    box.innerHTML = "";
+  if (typeof window.renderMarkmap !== "function") {
+    box.innerHTML = `<p class="error">心智圖元件尚未載入</p>`;
     return;
   }
   try {
-    const { svg } = await mermaid.render("mm" + Date.now(), code);
-    box.innerHTML = svg;
+    // window.renderMarkmap 由 index.html 的 module 腳本注入（markmap 渲染）。
+    window.renderMarkmap(code, box);
   } catch (err) {
     box.innerHTML = `<p class="error">心智圖語法錯誤，請重新生成</p>`;
   }

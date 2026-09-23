@@ -18,8 +18,11 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1] / "mobile-web"
 
-# index.html 中需要帶版本的資源
-ASSETS = ("style.css", "app.js")
+# index.html 中需要帶版本的資源。
+# mindmap-render.js 以 ESM import 載入（import 路徑不能帶 ?v=，否則會被當成不同模組、
+# 也對不上 SW 快取的 URL），故它不會被 stamp_index 加上 ?v=；但仍列入是為了讓它的
+# 內容變動能計入 sw.js 的 CACHE_VERSION，觸發 SW 更新（見 stamp_sw）。
+ASSETS = ("style.css", "app.js", "mindmap-render.js")
 
 
 def stamp_index() -> tuple[str, bool]:

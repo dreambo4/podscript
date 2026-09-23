@@ -118,7 +118,12 @@
   </form>
 </dialog>
 
-<script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+<script type="module">
+  // 心智圖改用 markmap 渲染（資料仍存 mermaid 語法，前端轉譯）。
+  // 掛到 window 供非-module 的 app.js 呼叫。
+  import { renderMindmap } from "./mindmap-render.js";
+  window.renderMarkmap = renderMindmap;
+</script>
 <script src="app.js"></script>
 </body>
 </html>

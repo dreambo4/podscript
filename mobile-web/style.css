@@ -759,30 +759,11 @@ body {
 .block { padding: 16px 0; }
 .block h3 { margin: 0 0 10px; font-size: 15px; }
 
-#mindmap { overflow-x: auto; max-width: 100%; min-height: 120px; margin-top: 16px; }
-#mindmap svg { display: block; min-width: 600px; height: auto; }
-#mindmap svg path.edge { stroke-width: 3px; opacity: 0.55; }
-
-/* mindmap 分支色：mermaid base 主題若靠 themeVariables.primaryColor 自動推算，
-   深色系種子會讓所有分支塌陷成同一種近黑色，因此直接指定每個 .section-N。
-   子層 path.node-bkg 的 class 一律是 node-0（mermaid 命名巧合），要靠父層 section-N 限定。 */
-#mindmap .section--1 .node-bkg, #mindmap .section--1 .basic { fill: var(--mm-root) !important; }
-#mindmap .section-0 .node-bkg, #mindmap .section-0 .basic { fill: var(--mm-0) !important; }
-#mindmap .section-1 .node-bkg, #mindmap .section-1 .basic { fill: var(--mm-1) !important; }
-#mindmap .section-2 .node-bkg, #mindmap .section-2 .basic { fill: var(--mm-2) !important; }
-#mindmap .section-3 .node-bkg, #mindmap .section-3 .basic { fill: var(--mm-3) !important; }
-#mindmap .section-4 .node-bkg, #mindmap .section-4 .basic { fill: var(--mm-4) !important; }
-#mindmap .section-5 .node-bkg, #mindmap .section-5 .basic { fill: var(--mm-5) !important; }
-#mindmap .section-6 .node-bkg, #mindmap .section-6 .basic { fill: var(--mm-6) !important; }
-#mindmap .section-edge--1 { stroke: var(--mm-root) !important; }
-#mindmap .section-edge-0 { stroke: var(--mm-0) !important; }
-#mindmap .section-edge-1 { stroke: var(--mm-1) !important; }
-#mindmap .section-edge-2 { stroke: var(--mm-2) !important; }
-#mindmap .section-edge-3 { stroke: var(--mm-3) !important; }
-#mindmap .section-edge-4 { stroke: var(--mm-4) !important; }
-#mindmap .section-edge-5 { stroke: var(--mm-5) !important; }
-#mindmap .section-edge-6 { stroke: var(--mm-6) !important; }
-#mindmap .nodeLabel { color: var(--mm-ink) !important; }
+/* 心智圖用 markmap 渲染：SVG 自適應，容器給固定高度供展開/縮放。
+   節點色、線粗由 mindmap-render.js 以 JS 指定；文字色用 --ink 跟隨深/淺色模式。 */
+#mindmap { max-width: 100%; height: 420px; margin-top: 16px; }
+#mindmap svg { display: block; width: 100%; height: 100%; }
+#mindmap .markmap-foreign { font-size: 18px; color: var(--ink); }
 
 .seg { margin-bottom: 16px; }
 

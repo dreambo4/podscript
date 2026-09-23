@@ -30,25 +30,12 @@ function toggleTheme() {
   const next = isDarkMode() ? "light" : "dark";
   localStorage.setItem(THEME_KEY, next);
   applyTheme(next);
+  // 心智圖 root 色是渲染時依主題算定的，切換主題需重繪才會更新（有心智圖時才做）。
+  if (currentMindmapCode) renderMindmap();
 }
 
-// 心智圖配色跟隨深/淺色模式；maxNodeWidth 縮窄節點寬度換取分支間距，避免節點多時交疊。
-// 分支色不透過 themeVariables 的 primaryColor 自動推算（該推算以 primaryColor
-// 明度為基準，深色系種子會讓所有分支色階塌陷成同一種近黑色），
-// 改用 CSS 直接指定 mermaid 產生的 .section-N / .section-edge-N，見 style.css。
-function initMindmapTheme() {
-  mermaid.initialize({
-    startOnLoad: false,
-    theme: "base",
-    themeVariables: {
-      fontFamily: '"PingFang TC", "Noto Sans TC", "Microsoft JhengHei", sans-serif',
-    },
-    mindmap: { padding: 16, maxNodeWidth: 120 },
-    fontSize: 14,
-  });
-}
-
-initMindmapTheme();
+// 心智圖改用 markmap 渲染（見 mindmap-render.js），透過 window.renderMarkmap 呼叫。
+// 資料仍存 mermaid 語法，由該模組轉譯，故此處不再需要 mermaid.initialize。
 
 applyTheme(getStoredTheme());
 document.querySelector("#btn-theme").addEventListener("click", toggleTheme);
@@ -823,15 +810,19 @@ function setDetailFavoriteIcon(isFavorite) {
 let currentDetailGuid = null;
 let currentMindmapCode = null;
 
-async function renderMindmap() {
+function renderMindmap() {
   const mindmapEl = document.querySelector("#mindmap");
   if (!currentMindmapCode) {
     mindmapEl.textContent = "（尚無心智圖）";
     return;
   }
-  mindmapEl.innerHTML = "";
-  const { svg } = await mermaid.render("mindmap-svg" + Date.now(), currentMindmapCode);
-  mindmapEl.innerHTML = svg;
+  if (typeof window.renderMarkmap !== "function") {
+    mindmapEl.textContent = "（心智圖元件尚未載入）";
+    return;
+  }
+  // 深色模式下 root 用較亮的灰，避免在深底糊掉；分支色為 HSL 高明度、深底仍清晰。
+  const rootColor = isDarkMode() ? "#cbd5e1" : "#475569";
+  window.renderMarkmap(currentMindmapCode, mindmapEl, { rootColor });
 }
 
 async function loadDetail(guid) {

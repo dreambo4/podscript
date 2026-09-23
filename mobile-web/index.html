@@ -36,7 +36,7 @@
 <meta name="twitter:description" content="Podcast 逐字稿工具：分角色逐字稿、摘要、心智圖">
 <meta name="twitter:image" content="icons/og-image.png">
 
-<link rel="stylesheet" href="style.css?v=a0899c67d8c4">
+<link rel="stylesheet" href="style.css?v=b01517bea516">
 <script src="config.js"></script>
 </head>
 <body>
@@ -278,8 +278,12 @@
   </div>
 </div>
 
-<script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
-<script src="app.js?v=2732c73c807a"></script>
+<script type="module">
+  // 心智圖改用 markmap 渲染（資料仍存 mermaid 語法，前端轉譯）。
+  import { renderMindmap } from "./mindmap-render.js";
+  window.renderMarkmap = renderMindmap;
+</script>
+<script src="app.js?v=cf9326613d33"></script>
 <script src="https://accounts.google.com/gsi/client" async defer onload="initGoogleSignIn()"></script>
 </body>
 </html>
