@@ -1,0 +1,122 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 920 620" width="920" height="620" role="img" aria-label="podscript 整體架構：本機處理管線寫入 Supabase，手機端透過 Railway API 與 Firebase Hosting 查詢 Supabase 並加入待處理清單">
+      <style>
+    svg { color: var(--ink-soft); }
+    :root {
+      --paper: #f7f5f1; --paper-raised: #ffffff; --ink: #24211c; --ink-soft: #5c584f; --line: #ddd8cd;
+      --local: #c1602a; --local-bg: #fbeee2; --cloud: #2f5f8a; --cloud-bg: #e7eef4; --ok: #4a7c4e;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --paper: #1c1a17; --paper-raised: #26231f; --ink: #ece7dd; --ink-soft: #a8a196; --line: #3a3630;
+        --local: #e08148; --local-bg: #33241a; --cloud: #7ba7cf; --cloud-bg: #1c2b38; --ok: #7fb583;
+      }
+    }
+    text { fill: var(--ink); font-family: -apple-system, "Helvetica Neue", "PingFang TC", "Noto Sans TC", sans-serif; }
+    .mono { font-family: ui-monospace, "SF Mono", Menlo, "PingFang TC", monospace; font-size: 10px; }
+    .zone-label { font-family: -apple-system, "Helvetica Neue", "PingFang TC", sans-serif; font-weight: 600; font-size: 13px; }
+    .box-title { font-family: -apple-system, "Helvetica Neue", "PingFang TC", sans-serif; font-weight: 600; font-size: 12.5px; }
+    .box-sub { font-size: 10.5px; opacity: 0.75; }
+    .edge-label { font-size: 10.5px; }
+  </style>
+  <rect width="920" height="620" style="fill:var(--paper)"/>
+      <defs>
+        <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path d="M0,0 L10,5 L0,10 z" fill="currentColor"/>
+        </marker>
+      </defs>
+
+      <!-- Local zone -->
+      <rect x="20" y="20" width="880" height="270" rx="10" style="fill:var(--local-bg);stroke:var(--local)" opacity="0.5" stroke-width="1.5" stroke-dasharray="4 3"/>
+      <text x="40" y="46" class="zone-label" style="fill:var(--local)">本機 · Apple Silicon Mac（localhost）</text>
+
+      <!-- web/app.js browser -->
+      <rect x="44" y="66" width="180" height="76" rx="8" style="fill:var(--paper-raised);stroke:var(--local)" stroke-width="1.5"/>
+      <text x="134" y="94" text-anchor="middle" class="box-title">瀏覽器</text>
+      <text x="134" y="112" text-anchor="middle" class="box-sub mono">web/app.js</text>
+      <text x="134" y="128" text-anchor="middle" class="box-sub">操作介面 · 輪詢進度</text>
+
+      <!-- arrow browser -> server -->
+      <line x1="224" y1="104" x2="288" y2="104" style="stroke:var(--local)" stroke-width="1.5" marker-end="url(#arrow)"/>
+      <text x="256" y="94" text-anchor="middle" class="edge-label" style="fill:var(--local)">GET /api/jobs</text>
+      <text x="256" y="123" text-anchor="middle" class="edge-label" style="fill:var(--local)">每 2 秒</text>
+
+      <!-- server.py -->
+      <rect x="292" y="60" width="210" height="88" rx="8" style="fill:var(--paper-raised);stroke:var(--local)" stroke-width="1.5"/>
+      <text x="397" y="86" text-anchor="middle" class="box-title">FastAPI（本機）</text>
+      <text x="397" y="104" text-anchor="middle" class="box-sub mono">src/podscript/server.py</text>
+      <text x="397" y="120" text-anchor="middle" class="box-sub">任務調度 · 進度狀態</text>
+      <text x="397" y="136" text-anchor="middle" class="box-sub mono" style="fill:var(--local)">job.json</text>
+
+      <!-- arrow server -> pipeline -->
+      <line x1="397" y1="148" x2="397" y2="182" style="stroke:var(--local)" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+      <!-- pipeline -->
+      <rect x="270" y="186" width="254" height="86" rx="8" style="fill:var(--paper-raised);stroke:var(--local)" stroke-width="1.5"/>
+      <text x="397" y="210" text-anchor="middle" class="box-title">轉錄管線</text>
+      <text x="397" y="227" text-anchor="middle" class="box-sub mono">transcribe / diarize / punctuate</text>
+      <text x="397" y="243" text-anchor="middle" class="box-sub">whisper.cpp（Metal GPU）+ pyannote</text>
+      <text x="397" y="259" text-anchor="middle" class="box-sub mono" style="fill:var(--local)">audio/&#123;guid&#125;/*.json</text>
+
+      <!-- arrow pipeline -> claude -->
+      <line x1="524" y1="215" x2="580" y2="215" style="stroke:var(--local)" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+      <!-- claude -p -->
+      <rect x="584" y="176" width="170" height="78" rx="8" style="fill:var(--paper-raised);stroke:var(--local)" stroke-width="1.5"/>
+      <text x="669" y="202" text-anchor="middle" class="box-title">摘要／心智圖</text>
+      <text x="669" y="219" text-anchor="middle" class="box-sub mono">claude -p</text>
+      <text x="669" y="235" text-anchor="middle" class="box-sub">SummaryProvider</text>
+
+      <!-- arrow pipeline -> upload -->
+      <line x1="397" y1="272" x2="397" y2="248" stroke="none"/>
+      <path d="M 397 272 L 397 310 L 700 310 L 700 260" fill="none" style="stroke:var(--local)" stroke-width="1.5" marker-end="url(#arrow)"/>
+      <text x="500" y="303" text-anchor="middle" class="edge-label" style="fill:var(--local)">手動觸發上傳</text>
+
+      <!-- upload.py -->
+      <rect x="620" y="68" width="140" height="72" rx="8" style="fill:var(--paper-raised);stroke:var(--local)" stroke-width="1.5" opacity="0">
+      </rect>
+
+      <!-- Cloud zone -->
+      <rect x="20" y="330" width="880" height="270" rx="10" style="fill:var(--cloud-bg);stroke:var(--cloud)" opacity="0.5" stroke-width="1.5" stroke-dasharray="4 3"/>
+      <text x="40" y="356" class="zone-label" style="fill:var(--cloud)">雲端 · 手機端（瀏覽、收藏、加入待處理）</text>
+
+      <!-- mobile-web -->
+      <rect x="44" y="376" width="190" height="82" rx="8" style="fill:var(--paper-raised);stroke:var(--cloud)" stroke-width="1.5"/>
+      <text x="139" y="402" text-anchor="middle" class="box-title">手機瀏覽器</text>
+      <text x="139" y="420" text-anchor="middle" class="box-sub mono">mobile-web/</text>
+      <text x="139" y="436" text-anchor="middle" class="box-sub">Firebase Hosting</text>
+      <text x="139" y="450" text-anchor="middle" class="box-sub">Google 登入 · 瀏覽 · 加待處理</text>
+
+      <!-- arrow mobile-web -> railway -->
+      <line x1="234" y1="417" x2="300" y2="417" style="stroke:var(--cloud)" stroke-width="1.5" marker-end="url(#arrow)"/>
+      <text x="267" y="407" text-anchor="middle" class="edge-label" style="fill:var(--cloud)">HTTPS</text>
+
+      <!-- mobile-backend -->
+      <rect x="304" y="370" width="230" height="94" rx="8" style="fill:var(--paper-raised);stroke:var(--cloud)" stroke-width="1.5"/>
+      <text x="419" y="394" text-anchor="middle" class="box-title">FastAPI（手機端）</text>
+      <text x="419" y="412" text-anchor="middle" class="box-sub mono">mobile-backend/</text>
+      <text x="419" y="428" text-anchor="middle" class="box-sub">Railway 部署</text>
+      <text x="419" y="444" text-anchor="middle" class="box-sub">Google id_token 驗證 → JWT</text>
+      <text x="419" y="458" text-anchor="middle" class="box-sub">查詢 · 收藏 · 待處理（psycopg）</text>
+
+      <!-- arrow mobile-backend -> supabase -->
+      <line x1="534" y1="417" x2="596" y2="417" style="stroke:var(--cloud)" stroke-width="1.5" marker-end="url(#arrow)"/>
+      <text x="565" y="407" text-anchor="middle" class="edge-label" style="fill:var(--cloud)">SQL</text>
+
+      <!-- Supabase (shared, spans both zones visually via connector below) -->
+      <rect x="600" y="372" width="240" height="90" rx="8" style="fill:var(--paper-raised);stroke:var(--ok)" stroke-width="2"/>
+      <text x="720" y="397" text-anchor="middle" class="box-title">Supabase Postgres</text>
+      <text x="720" y="415" text-anchor="middle" class="box-sub">episodes / users / queue / favorites</text>
+      <text x="720" y="431" text-anchor="middle" class="box-sub mono">pg_trgm（中文搜尋）</text>
+      <text x="720" y="447" text-anchor="middle" class="box-sub">共用資料層 · 唯一交集</text>
+
+      <!-- connector from local upload to supabase (long curve across zones) -->
+      <path d="M 700 260 C 700 300, 720 300, 720 372" fill="none" style="stroke:var(--ok)" stroke-width="1.8" marker-end="url(#arrow)"/>
+      <text x="800" y="330" text-anchor="middle" class="edge-label" style="fill:var(--ok)">upload.py 寫入 · 讀取待處理</text>
+
+      <!-- bottom note strip -->
+      <rect x="44" y="486" width="796" height="94" rx="8" style="fill:var(--paper-raised);stroke:var(--line)" stroke-width="1.2"/>
+      <text x="64" y="510" class="box-title">兩套服務不互相 import，唯一交集是 Supabase</text>
+      <text x="64" y="530" class="box-sub">本機 server.py 的 /api/jobs 輪詢，只在 localhost 內部發生，不經過 Railway，不影響雲端計費。</text>
+      <text x="64" y="548" class="box-sub">Railway 只跑 mobile-backend（查詢與待處理清單），完全不含 Whisper／pyannote／Metal GPU 相依套件。</text>
+      <text x="64" y="566" class="box-sub">CORS 由 mobile-backend 的 ALLOWED_ORIGINS 環境變數限制可呼叫的前端網域。</text>
+    </svg>

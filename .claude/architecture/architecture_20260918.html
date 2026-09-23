@@ -215,17 +215,17 @@ footer {
   <header>
     <p class="eyebrow">System overview · 2026-09-18</p>
     <h1>podscript 架構圖</h1>
-    <p class="sub">兩套完全獨立的服務：本機重運算管線負責產生逐字稿／摘要，手機端輕量 API 負責唯讀查詢。兩者不共用程式碼，只透過 Supabase 交換資料。</p>
+    <p class="sub">兩套完全獨立的服務：本機重運算管線負責產生逐字稿／摘要，手機端輕量 API 負責瀏覽查詢、收藏與加入待處理清單。兩者不共用程式碼，只透過 Supabase 交換資料。</p>
   </header>
 
   <div class="legend">
-    <div class="legend-item"><span class="swatch" style="background:var(--local)"></span>本機（M1 Mac mini）</div>
+    <div class="legend-item"><span class="swatch" style="background:var(--local)"></span>本機（Apple Silicon Mac）</div>
     <div class="legend-item"><span class="swatch" style="background:var(--cloud)"></span>雲端（Railway / Firebase）</div>
     <div class="legend-item"><span class="swatch" style="background:var(--ok)"></span>Supabase（共用資料層）</div>
   </div>
 
   <figure>
-    <svg viewBox="0 0 920 620" role="img" aria-label="podscript 整體架構：本機處理管線寫入 Supabase，手機端透過 Railway API 與 Firebase Hosting 唯讀查詢 Supabase">
+    <svg viewBox="0 0 920 620" role="img" aria-label="podscript 整體架構：本機處理管線寫入 Supabase，手機端透過 Railway API 與 Firebase Hosting 查詢 Supabase 並加入待處理清單">
       <defs>
         <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
           <path d="M0,0 L10,5 L0,10 z" fill="currentColor"/>
@@ -234,7 +234,7 @@ footer {
 
       <!-- Local zone -->
       <rect x="20" y="20" width="880" height="270" rx="10" fill="var(--local-bg)" opacity="0.5" stroke="var(--local)" stroke-width="1.5" stroke-dasharray="4 3"/>
-      <text x="40" y="46" class="zone-label" fill="var(--local)">本機 · M1 Mac mini（localhost）</text>
+      <text x="40" y="46" class="zone-label" fill="var(--local)">本機 · Apple Silicon Mac（localhost）</text>
 
       <!-- web/app.js browser -->
       <rect x="44" y="66" width="180" height="76" rx="8" fill="var(--paper-raised)" stroke="var(--local)" stroke-width="1.5"/>
@@ -284,14 +284,14 @@ footer {
 
       <!-- Cloud zone -->
       <rect x="20" y="330" width="880" height="270" rx="10" fill="var(--cloud-bg)" opacity="0.5" stroke="var(--cloud)" stroke-width="1.5" stroke-dasharray="4 3"/>
-      <text x="40" y="356" class="zone-label" fill="var(--cloud)">雲端 · 手機端唯讀查詢</text>
+      <text x="40" y="356" class="zone-label" fill="var(--cloud)">雲端 · 手機端（瀏覽、收藏、加入待處理）</text>
 
       <!-- mobile-web -->
       <rect x="44" y="376" width="190" height="82" rx="8" fill="var(--paper-raised)" stroke="var(--cloud)" stroke-width="1.5"/>
       <text x="139" y="402" text-anchor="middle" class="box-title">手機瀏覽器</text>
       <text x="139" y="420" text-anchor="middle" class="box-sub mono">mobile-web/</text>
       <text x="139" y="436" text-anchor="middle" class="box-sub">Firebase Hosting</text>
-      <text x="139" y="450" text-anchor="middle" class="box-sub">Google 登入 · 列表 · 詳細頁</text>
+      <text x="139" y="450" text-anchor="middle" class="box-sub">Google 登入 · 瀏覽 · 加待處理</text>
 
       <!-- arrow mobile-web -> railway -->
       <line x1="234" y1="417" x2="300" y2="417" stroke="var(--cloud)" stroke-width="1.5" marker-end="url(#arrow)"/>
@@ -303,7 +303,7 @@ footer {
       <text x="419" y="412" text-anchor="middle" class="box-sub mono">mobile-backend/</text>
       <text x="419" y="428" text-anchor="middle" class="box-sub">Railway 部署</text>
       <text x="419" y="444" text-anchor="middle" class="box-sub">Google id_token 驗證 → JWT</text>
-      <text x="419" y="458" text-anchor="middle" class="box-sub">唯讀 SELECT（psycopg）</text>
+      <text x="419" y="458" text-anchor="middle" class="box-sub">查詢 · 收藏 · 待處理（psycopg）</text>
 
       <!-- arrow mobile-backend -> supabase -->
       <line x1="534" y1="417" x2="596" y2="417" stroke="var(--cloud)" stroke-width="1.5" marker-end="url(#arrow)"/>
@@ -312,22 +312,22 @@ footer {
       <!-- Supabase (shared, spans both zones visually via connector below) -->
       <rect x="600" y="372" width="240" height="90" rx="8" fill="var(--paper-raised)" stroke="var(--ok)" stroke-width="2"/>
       <text x="720" y="397" text-anchor="middle" class="box-title">Supabase Postgres</text>
-      <text x="720" y="415" text-anchor="middle" class="box-sub">episodes / transcripts / users</text>
+      <text x="720" y="415" text-anchor="middle" class="box-sub">episodes / users / queue / favorites</text>
       <text x="720" y="431" text-anchor="middle" class="box-sub mono">pg_trgm（中文搜尋）</text>
       <text x="720" y="447" text-anchor="middle" class="box-sub">共用資料層 · 唯一交集</text>
 
       <!-- connector from local upload to supabase (long curve across zones) -->
       <path d="M 700 260 C 700 300, 720 300, 720 372" fill="none" stroke="var(--ok)" stroke-width="1.8" marker-end="url(#arrow)"/>
-      <text x="800" y="330" text-anchor="middle" class="edge-label" fill="var(--ok)">upload.py 寫入</text>
+      <text x="800" y="330" text-anchor="middle" class="edge-label" fill="var(--ok)">upload.py 寫入 · 讀取待處理</text>
 
       <!-- bottom note strip -->
       <rect x="44" y="486" width="796" height="94" rx="8" fill="var(--paper-raised)" stroke="var(--line)" stroke-width="1.2"/>
       <text x="64" y="510" class="box-title">兩套服務不互相 import，唯一交集是 Supabase</text>
       <text x="64" y="530" class="box-sub">本機 server.py 的 /api/jobs 輪詢，只在 localhost 內部發生，不經過 Railway，不影響雲端計費。</text>
-      <text x="64" y="548" class="box-sub">Railway 只跑 mobile-backend（唯讀 API），完全不含 Whisper／pyannote／Metal GPU 相依套件。</text>
+      <text x="64" y="548" class="box-sub">Railway 只跑 mobile-backend（查詢與待處理清單），完全不含 Whisper／pyannote／Metal GPU 相依套件。</text>
       <text x="64" y="566" class="box-sub">CORS 由 mobile-backend 的 ALLOWED_ORIGINS 環境變數限制可呼叫的前端網域。</text>
     </svg>
-    <figcaption>上：本機處理管線（轉錄、摘要、手動上傳），全程 localhost，與 Railway 無關。下：手機端唯讀查詢，Firebase Hosting 靜態頁呼叫 Railway 上的 mobile-backend，兩者都只讀 Supabase。</figcaption>
+    <figcaption>上：本機處理管線（轉錄、摘要、手動上傳），全程 localhost，與 Railway 無關。下：手機端，Firebase Hosting 靜態頁呼叫 Railway 上的 mobile-backend，查詢 Supabase，並可把網址加入待處理清單，由本機接手轉錄。</figcaption>
   </figure>
 
   <hr class="divider">
@@ -360,16 +360,16 @@ footer {
   </section>
 
   <section>
-    <h2>手機端唯讀查詢 <span class="tag cloud">Railway + Firebase</span></h2>
-    <p class="zone-desc">跟本機完全獨立的一套服務，只做「登入 + 唯讀查詢」，不 import 本機任何程式碼。</p>
+    <h2>手機端 <span class="tag cloud">Railway + Firebase</span></h2>
+    <p class="zone-desc">跟本機完全獨立的一套服務，負責登入、瀏覽查詢、收藏與加入待處理清單，不 import 本機任何程式碼。手機端不做轉錄，待處理清單由本機讀取後處理。</p>
     <div class="grid">
       <div class="card">
         <div class="card-head"><span class="card-path">mobile-web/</span><span class="card-role">前端</span></div>
-        <p>原生 HTML 唯讀介面，部署於 Firebase Hosting，透過 config.js 指向 API 網址。</p>
+        <p>原生 HTML 介面，部署於 Firebase Hosting，透過 config.js 指向 API 網址。</p>
       </div>
       <div class="card">
         <div class="card-head"><span class="card-path">mobile-backend/</span><span class="card-role">API</span></div>
-        <p>獨立 FastAPI app，計劃部署於 Railway。Google id_token 驗證 + JWT，唯讀 SELECT（同步 psycopg）。</p>
+        <p>獨立 FastAPI app，部署於 Railway。Google id_token 驗證 + JWT，同步 psycopg 存取 Supabase。</p>
       </div>
       <div class="card">
         <div class="card-head"><span class="card-path">routers/auth.py</span><span class="card-role">認證</span></div>
@@ -377,15 +377,19 @@ footer {
       </div>
       <div class="card">
         <div class="card-head"><span class="card-path">routers/episodes.py</span><span class="card-role">查詢</span></div>
-        <p>列表（搜尋＋標籤＋分頁）與詳細頁，中文搜尋靠 pg_trgm。</p>
+        <p>列表（搜尋＋標籤＋分頁）、詳細頁與收藏，中文搜尋靠 pg_trgm。</p>
+      </div>
+      <div class="card">
+        <div class="card-head"><span class="card-path">routers/queue.py</span><span class="card-role">待處理</span></div>
+        <p>貼上網址寫入 queue 表；本機網頁讀取清單後轉錄，上傳完成即從清單刪除。</p>
       </div>
     </div>
   </section>
 
   <div class="note">
     <p style="margin:0 0 8px"><b>關於你剛才看到的 GET 輪詢 log：</b>那是 <code>web/app.js</code> 打本機 <code>server.py</code>，完全發生在 localhost 內部，跟 Railway 無關，不會有計費或負擔問題。</p>
-    <p style="margin:0">等 <code>mobile-backend</code> 上線 Railway 後，那邊的流量只會是手機端偶爾打的唯讀查詢（<code>/api/episodes</code>、<code>/api/auth/google</code>），本身沒有輪詢機制，量會很小。</p>
+    <p style="margin:0"><code>mobile-backend</code> 在 Railway 上的流量只有手機端偶爾的查詢與待處理操作（<code>/api/episodes</code>、<code>/api/queue</code>、<code>/api/auth/google</code>），本身沒有輪詢機制，量會很小。</p>
   </div>
 
-  <footer>podscript · 本機重運算 + 手機唯讀瀏覽 · 資料交集僅 Supabase</footer>
+  <footer>podscript · 本機重運算 + 手機瀏覽 · 資料交集僅 Supabase</footer>
 </div>
