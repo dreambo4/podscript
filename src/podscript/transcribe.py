@@ -12,6 +12,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable
 
+from . import hardware
+
 MODELS_DIR = Path(__file__).resolve().parents[2] / "models"
 WHISPER_BIN = "whisper-cli"
 
@@ -86,7 +88,9 @@ def model_path(model: str) -> Path:
     """
     path = MODELS_DIR / f"ggml-{model}.bin"
     if not path.exists():
-        raise TranscribeError(f"找不到模型 {path}；請先下載 ggml-{model}.bin")
+        raise TranscribeError(
+            f"找不到模型 {path}；請執行 python3 scripts/setup-model.py 下載"
+        )
     return path
 
 
@@ -96,7 +100,7 @@ def transcribe(
     model: str = "large-v2",
     output_path: Path | None = None,
     force: bool = False,
-    threads: int = 8,
+    threads: int | None = None,
     initial_prompt: str = ZH_TW_PROMPT,
     on_percent: Callable[[int], None] | None = None,
 ) -> list[Segment]:
@@ -109,6 +113,7 @@ def transcribe(
         model: ggml 模型名稱，需有對應的 models/ggml-<model>.bin。
         output_path: 輸出位置，預設為音檔同目錄的 whisper.json。
         force: 已有輸出檔時仍重新轉錄。
+        threads: 執行緒數，省略則依本機效能核心數。
 
     Raises:
         TranscribeError: 找不到 whisper-cli 或模型、轉錄程序非零退出、輸出無法解析。
@@ -120,11 +125,13 @@ def transcribe(
     if target.exists() and not force:
         return load_segments(target)
 
+    path = model_path(model)
+
     # whisper-cli 會自動補上 .json 副檔名，因此傳入去掉副檔名的前綴。
     prefix = target.with_suffix("")
     cmd = [
         WHISPER_BIN,
-        "-m", str(model_path(model)),
+        "-m", str(path),
         "-f", str(wav_path),
         "-l", "zh",
         "--prompt", initial_prompt,
@@ -132,7 +139,7 @@ def transcribe(
         "--suppress-nst",
         "--output-json-full",
         "--output-file", str(prefix),
-        "--threads", str(threads),
+        "--threads", str(threads or hardware.performance_cores()),
         "--print-progress",
     ]
 
