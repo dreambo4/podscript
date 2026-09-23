@@ -171,17 +171,6 @@ body {
 
 .brand-name { font-weight: 700; }
 
-.brand-env {
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: .08em;
-  padding: 2px 7px;
-  border-radius: 4px;
-  border: 1px solid var(--line);
-  color: var(--muted);
-  background: var(--bg);
-}
-
 .icon-btn {
   display: none;
   padding: 6px 10px;
@@ -516,8 +505,7 @@ dialog menu { display: flex; gap: 8px; justify-content: flex-end; margin: 20px 0
   .sidebar.open { transform: none; }
   #content { padding: 16px; }
   /* 窄螢幕保留圖示當識別，只收起文字 */
-  .topbar h1 .brand-name,
-  .topbar h1 .brand-env { display: none; }
+  .topbar h1 .brand-name { display: none; }
 
   .block-head { align-items: flex-start; }
 
