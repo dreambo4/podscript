@@ -16,6 +16,8 @@ from .base import Episode, PlatformResolver, ResolveError
 LOOKUP_API = "https://itunes.apple.com/lookup"
 # Lookup API 的 podcastEpisode 查詢最多回傳 200 集，較舊的單集需改走 RSS。
 LOOKUP_EPISODE_LIMIT = 200
+# Lookup API 未帶 country 時只查美國區；僅在特定地區上架的節目會查無結果。
+DEFAULT_COUNTRY = "tw"
 TIMEOUT = 30
 
 _ITUNES_NS = "{http://www.itunes.com/dtds/podcast-1.0.dtd}"
@@ -29,9 +31,10 @@ class ApplePodcastResolver(PlatformResolver):
 
     def resolve(self, url: str) -> Episode:
         podcast_id, episode_id = self._parse_url(url)
-        podcast_name, feed_url = self._lookup_podcast(podcast_id)
+        country = _parse_country(url)
+        podcast_name, feed_url = self._lookup_podcast(podcast_id, country)
 
-        episode = self._from_lookup(podcast_id, episode_id, podcast_name, url)
+        episode = self._from_lookup(podcast_id, episode_id, podcast_name, url, country)
         if episode is None:
             episode = self._from_rss(feed_url, episode_id, podcast_name, url)
         return episode
@@ -46,11 +49,11 @@ class ApplePodcastResolver(PlatformResolver):
             raise ResolveError("網址中找不到單集 id（預期格式 ...?i=1000789515808）；請複製單集頁面而非節目首頁的網址")
         return podcast_match.group(1), episode_match.group(1)
 
-    def _lookup_podcast(self, podcast_id: str) -> tuple[str, str]:
+    def _lookup_podcast(self, podcast_id: str, country: str) -> tuple[str, str]:
         """查節目層資訊，取得節目名稱與 RSS 位址。"""
         resp = requests.get(
             LOOKUP_API,
-            params={"id": podcast_id, "entity": "podcast"},
+            params={"id": podcast_id, "entity": "podcast", "country": country},
             timeout=TIMEOUT,
         )
         resp.raise_for_status()
@@ -65,7 +68,12 @@ class ApplePodcastResolver(PlatformResolver):
         return info.get("collectionName", ""), feed_url
 
     def _from_lookup(
-        self, podcast_id: str, episode_id: str, podcast_name: str, source_url: str
+        self,
+        podcast_id: str,
+        episode_id: str,
+        podcast_name: str,
+        source_url: str,
+        country: str,
     ) -> Episode | None:
         """以 Lookup API 的單集列表比對 trackId。查無對應單集時回傳 None。"""
         resp = requests.get(
@@ -74,6 +82,7 @@ class ApplePodcastResolver(PlatformResolver):
                 "id": podcast_id,
                 "entity": "podcastEpisode",
                 "limit": LOOKUP_EPISODE_LIMIT,
+                "country": country,
             },
             timeout=TIMEOUT,
         )
@@ -161,6 +170,12 @@ class ApplePodcastResolver(PlatformResolver):
         if not inner:
             raise ResolveError("Apple 頁面標題格式非預期，無法取出單集名稱")
         return inner.group(1).strip()
+
+
+def _parse_country(url: str) -> str:
+    """從網址取出商店地區碼（podcasts.apple.com/tw/podcast/...），缺少時用預設值。"""
+    match = re.search(r"podcasts\.apple\.com/([a-z]{2})/", url, re.I)
+    return match.group(1).lower() if match else DEFAULT_COUNTRY
 
 
 def _text(element: ET.Element, tag: str) -> str | None:
