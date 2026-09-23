@@ -23,7 +23,10 @@ function applyTheme(theme) {
   if (theme) root.setAttribute("data-theme", theme);
   else root.removeAttribute("data-theme");
 
-  document.querySelector("#theme-icon use").setAttribute("href", isDarkMode() ? "#ic-sun" : "#ic-moon");
+  const dark = isDarkMode();
+  document.querySelector("#theme-icon use").setAttribute("href", dark ? "#ic-sun" : "#ic-moon");
+  document.querySelector("#menu-theme-icon use").setAttribute("href", dark ? "#ic-sun" : "#ic-moon");
+  document.querySelector("#menu-theme-label").textContent = dark ? "淺色模式" : "深色模式";
 }
 
 function toggleTheme() {
@@ -39,6 +42,30 @@ function toggleTheme() {
 
 applyTheme(getStoredTheme());
 document.querySelector("#btn-theme").addEventListener("click", toggleTheme);
+
+// ── 使用者選單（名稱下拉：深淺色切換、登出）──────────────
+const userMenuBtn = document.querySelector("#btn-user-menu");
+const userMenu = document.querySelector("#user-menu");
+
+function setUserMenuOpen(open) {
+  userMenu.hidden = !open;
+  userMenuBtn.setAttribute("aria-expanded", String(open));
+}
+
+userMenuBtn.addEventListener("click", (e) => {
+  e.stopPropagation();
+  setUserMenuOpen(userMenu.hidden);
+});
+document.addEventListener("click", (e) => {
+  if (!userMenu.hidden && !userMenu.contains(e.target)) setUserMenuOpen(false);
+});
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && !userMenu.hidden) setUserMenuOpen(false);
+});
+document.querySelector("#btn-menu-theme").addEventListener("click", () => {
+  toggleTheme();
+  setUserMenuOpen(false);
+});
 
 // ── 登入 ──────────────────────────────────────────
 function getToken() {
@@ -64,7 +91,9 @@ function showUserInfo() {
   }
   document.querySelector("#g_id_signin").hidden = true;
   document.querySelector("#user-info").hidden = false;
-  document.querySelector("#user-name").textContent = `你好，${name}`;
+  document.querySelector("#user-name").textContent = name;
+  // 登入後深淺色切換收進名稱下拉選單；未登入時保留 topbar 上的按鈕
+  document.querySelector("#btn-theme").hidden = true;
   document.querySelector("#btn-tags-entry").hidden = false;
   document.querySelector("#btn-favorites-entry").hidden = false;
   return true;
@@ -73,6 +102,8 @@ function showUserInfo() {
 function hideUserInfo() {
   document.querySelector("#g_id_signin").hidden = false;
   document.querySelector("#user-info").hidden = true;
+  document.querySelector("#btn-theme").hidden = false;
+  setUserMenuOpen(false);
   document.querySelector("#btn-tags-entry").hidden = true;
   document.querySelector("#btn-favorites-entry").hidden = true;
 }
@@ -911,6 +942,7 @@ document.querySelector("#btn-back").addEventListener("click", () => {
   history.back();
 });
 document.querySelector("#btn-logout").addEventListener("click", () => {
+  setUserMenuOpen(false);
   clearToken();
   location.hash = "#/";
   route();

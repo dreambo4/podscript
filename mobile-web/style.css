@@ -785,14 +785,57 @@ body {
 #g_id_signin { flex: none; }
 
 .user-info {
-  display: flex;
-  align-items: center;
-  gap: 8px;
+  position: relative;
   flex: none;
-  font-size: 13px;
+  min-width: 0;
+  margin-left: 4px;
 }
 
-.user-info #btn-logout {
-  padding: 4px 10px;
-  font-size: 12px;
+.user-menu-btn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 40vw;
+  padding: 6px 4px 6px 8px;
+  border: none;
+  background: none;
+  color: var(--ink);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
 }
+.user-menu-btn #user-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.user-menu-caret { flex: none; color: var(--muted); transform: rotate(180deg); transition: transform .15s; }
+.user-menu-btn[aria-expanded="true"] .user-menu-caret { transform: none; }
+
+.user-menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  min-width: 160px;
+  padding: 6px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  box-shadow: 0 12px 28px -12px rgba(0, 0, 0, .28);
+  z-index: 20;
+}
+.user-menu button {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 10px 12px;
+  border: none;
+  border-radius: 8px;
+  background: none;
+  color: var(--ink);
+  font: inherit;
+  font-size: 14px;
+  text-align: left;
+  cursor: pointer;
+}
+.user-menu button:active,
+.user-menu button:hover { background: var(--accent-soft); }
+.user-menu button .icon { color: var(--muted); }

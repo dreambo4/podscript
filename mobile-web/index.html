@@ -36,7 +36,7 @@
 <meta name="twitter:description" content="Podcast 逐字稿工具：分角色逐字稿、摘要、心智圖">
 <meta name="twitter:image" content="icons/og-image.png">
 
-<link rel="stylesheet" href="style.css?v=b01517bea516">
+<link rel="stylesheet" href="style.css?v=135862020a11">
 <script src="config.js"></script>
 </head>
 <body>
@@ -86,6 +86,9 @@
     <symbol id="ic-trash" viewBox="0 0 24 24">
       <path d="M4.5 7h15M9.5 7V5.2A1.2 1.2 0 0 1 10.7 4h2.6a1.2 1.2 0 0 1 1.2 1.2V7M6.5 7l.9 12.1a1.5 1.5 0 0 0 1.5 1.4h6.2a1.5 1.5 0 0 0 1.5-1.4L17.5 7" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
     </symbol>
+    <symbol id="ic-logout" viewBox="0 0 24 24">
+      <path d="M14 4.5H6.5a1.5 1.5 0 0 0-1.5 1.5v12a1.5 1.5 0 0 0 1.5 1.5H14M10 12h10M16.5 8.5 20 12l-3.5 3.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+    </symbol>
     <symbol id="ic-moon" viewBox="0 0 24 24">
       <path d="M20 14.2A8.5 8.5 0 1 1 9.8 4a6.8 6.8 0 0 0 10.2 10.2Z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>
     </symbol>
@@ -116,8 +119,20 @@
   </button>
   <div id="g_id_signin"></div>
   <div id="user-info" class="user-info" hidden>
-    <span id="user-name"></span>
-    <button id="btn-logout" type="button">登出</button>
+    <button id="btn-user-menu" class="user-menu-btn" type="button" aria-haspopup="menu" aria-expanded="false" aria-controls="user-menu">
+      <span id="user-name"></span>
+      <svg class="icon icon-xs user-menu-caret"><use href="#ic-chevron-up"/></svg>
+    </button>
+    <div id="user-menu" class="user-menu" role="menu" hidden>
+      <button id="btn-menu-theme" type="button" role="menuitem">
+        <svg class="icon icon-sm" id="menu-theme-icon"><use href="#ic-moon"/></svg>
+        <span id="menu-theme-label">深色模式</span>
+      </button>
+      <button id="btn-logout" type="button" role="menuitem">
+        <svg class="icon icon-sm"><use href="#ic-logout"/></svg>
+        <span>登出</span>
+      </button>
+    </div>
   </div>
 </header>
 
@@ -283,7 +298,7 @@
   import { renderMindmap } from "./mindmap-render.js";
   window.renderMarkmap = renderMindmap;
 </script>
-<script src="app.js?v=cf9326613d33"></script>
+<script src="app.js?v=9a9b3e57b8ef"></script>
 <script src="https://accounts.google.com/gsi/client" async defer onload="initGoogleSignIn()"></script>
 </body>
 </html>
