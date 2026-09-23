@@ -402,8 +402,8 @@ body {
 /* ── 卡片式列表 ───────────────────────────────── */
 .cards { display: flex; flex-direction: column; gap: 12px; }
 
-/* 只有列表頁有 scrubber，需要留白不被蓋住；收藏頁沒有 scrubber 不需要 */
-#list-scroll .cards { padding-right: 28px; }
+/* scrubber 顯示時（多於一個年月分組）才留白避免被蓋住；只有一組時不出現，卡片維持滿寬 */
+#list-scroll.has-scrubber .cards { padding-right: 28px; }
 
 .ep-card {
   position: relative;

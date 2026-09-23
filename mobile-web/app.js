@@ -316,6 +316,7 @@ function groupByYearMonth(episodes, sortField) {
 
 function renderScrubber(groupKeys) {
   const scrubber = document.querySelector("#scrubber");
+  document.querySelector("#list-scroll").classList.toggle("has-scrubber", groupKeys.length > 1);
   if (groupKeys.length <= 1) {
     scrubber.hidden = true;
     scrubber.innerHTML = "";
