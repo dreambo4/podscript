@@ -139,7 +139,9 @@ async function api(path, options = {}) {
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
     const detail = typeof body.detail === "string" ? body.detail : JSON.stringify(body.detail || res.status);
-    throw new Error(detail);
+    const err = new Error(detail);
+    err.status = res.status;  // 供呼叫端分辨錯誤種類，例如 404 代表後端尚未提供該 API
+    throw err;
   }
   if (res.status === 204) return null;
   return res.json();
@@ -416,6 +418,9 @@ async function ensureChannelsLoaded() {
 async function loadList() {
   const requestId = ++listRequestId;
 
+  // 待處理清單與集數列表互不相依，平行拉取，失敗各自處理
+  loadQueue();
+
   await ensureChannelsLoaded();
   renderSheetChannelChips();
   renderActiveFilters();
@@ -459,6 +464,124 @@ function debounce(fn, ms) {
     timer = setTimeout(() => fn(...args), ms);
   };
 }
+
+// ── 待處理區 ──────────────────────────────────────
+// 待處理的 url 與 note 是使用者直接輸入的內容，
+// 透過 innerHTML 顯示前必須跳脫，否則貼入含標籤的字串即可注入。
+function escapeHtml(text) {
+  return String(text ?? "").replace(
+    /[&<>"']/g,
+    ch => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[ch]
+  );
+}
+
+// 手機端只把網址存進資料庫，實際下載與轉錄回本機端再跑。
+const QUEUE_OPEN_KEY = "podscript_queue_open";
+
+let queueItems = [];
+
+function queueMessage(text, ok = false) {
+  const el = document.querySelector("#queue-msg");
+  el.textContent = text;
+  el.classList.toggle("ok", ok);
+  el.hidden = !text;
+}
+
+function renderQueue() {
+  const container = document.querySelector("#queue-items");
+  const badge = document.querySelector("#queue-count");
+
+  badge.textContent = queueItems.length;
+  badge.hidden = queueItems.length === 0;
+  document.querySelector("#queue-empty").hidden = queueItems.length > 0;
+
+  container.innerHTML = "";
+  queueItems.forEach(item => {
+    const div = document.createElement("div");
+    div.className = "queue-item";
+    div.innerHTML = `
+      <div class="queue-item-body">
+        <span class="queue-item-url">${escapeHtml(item.title || item.url)}</span>
+        ${item.note ? `<span class="queue-item-note">${escapeHtml(item.note)}</span>` : ""}
+      </div>
+      <button type="button" class="queue-item-del" aria-label="移除">
+        <svg class="icon icon-sm"><use href="#ic-trash"/></svg>
+      </button>
+    `;
+    div.querySelector(".queue-item-del").addEventListener("click", async () => {
+      try {
+        await api(`/queue/${item.id}`, { method: "DELETE" });
+        queueItems = queueItems.filter(i => i.id !== item.id);
+        renderQueue();
+      } catch (err) {
+        queueMessage(`移除失敗：${err.message}`);
+      }
+    });
+    container.appendChild(div);
+  });
+}
+
+async function loadQueue() {
+  const section = document.querySelector("#queue-section");
+  try {
+    queueItems = await api("/queue?status=pending");
+  } catch (err) {
+    // 404 代表後端還沒部署這個 API，使用者對此無能為力，整區靜默隱藏。
+    // 其餘錯誤（連線失敗、500）才提示，且只在待處理區內，不影響集數列表。
+    console.error(err);
+    if (err.status === 404) {
+      section.hidden = true;
+    } else {
+      queueMessage(`待處理清單讀取失敗：${err.message}`);
+    }
+    return;
+  }
+  section.hidden = false;
+  renderQueue();
+}
+
+function setQueueOpen(open) {
+  document.querySelector("#queue-toggle").setAttribute("aria-expanded", String(open));
+  document.querySelector("#queue-body").hidden = !open;
+  localStorage.setItem(QUEUE_OPEN_KEY, open ? "1" : "0");
+}
+
+document.querySelector("#queue-toggle").addEventListener("click", () => {
+  const open = document.querySelector("#queue-toggle").getAttribute("aria-expanded") !== "true";
+  setQueueOpen(open);
+});
+
+document.querySelector("#queue-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const urlInput = document.querySelector("#queue-url");
+  const noteInput = document.querySelector("#queue-note");
+  const btn = e.currentTarget.querySelector(".queue-add-btn");
+
+  const url = urlInput.value.trim();
+  if (!url) return;
+
+  btn.disabled = true;
+  queueMessage("");
+  try {
+    const item = await api("/queue", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ url, note: noteInput.value.trim() || null }),
+    });
+    urlInput.value = "";
+    noteInput.value = "";
+    // 重複貼同一網址時後端回傳既有那筆，這裡去重避免列表出現兩筆
+    queueItems = [item, ...queueItems.filter(i => i.id !== item.id)];
+    renderQueue();
+    queueMessage("已加入待處理，回家開本機端處理。", true);
+  } catch (err) {
+    queueMessage(err.message);
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+setQueueOpen(localStorage.getItem(QUEUE_OPEN_KEY) === "1");
 
 // ── 篩選 Bottom Sheet ────────────────────────────────
 let sheetSort = getSort();
@@ -775,6 +898,8 @@ async function route() {
         currentTags = [tagParam];
         currentTagMode = "any";
       }
+      // manifest 的「加入待處理」捷徑會帶 queue=open，直接展開該區
+      if (params.get("queue") === "open") setQueueOpen(true);
       showList();
       await loadList();
     }
@@ -796,3 +921,14 @@ document.querySelector("#btn-logout").addEventListener("click", () => {
 });
 
 route();
+
+// ── PWA ───────────────────────────────────────────
+// Service Worker 只快取靜態外殼，API 一律走網路（見 sw.js）。
+// 註冊失敗不影響任何功能，僅代表無法安裝到主畫面與離線開啟。
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("sw.js").catch(err => {
+      console.warn("Service Worker 註冊失敗：", err);
+    });
+  });
+}

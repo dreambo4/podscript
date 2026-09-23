@@ -61,3 +61,32 @@ create index if not exists users_email_idx on users (email);
 -- 否則任何持有 anon key 者皆可讀寫全部資料。
 --
 -- 也可視為 DATABASE_URL 外流時的第二道防線，屆時再評估。
+
+-- ────────────────────────────────────────────────
+-- 待處理佇列（手機端貼網址暫存，回家在本機端處理）
+--
+-- 手機端只驗證是否為合法 http(s) 網址，不檢查平台：
+-- 解析責任在本機端 resolver，平台擴充時不必同步改動手機端。
+-- episode_guid 與 title 在本機端解析成功後才回填，故可為 null。
+create table if not exists queue (
+  id           uuid primary key default gen_random_uuid(),
+  url          text not null check (url <> '' and length(url) <= 2048),
+  episode_guid text,                               -- 本機端解析後回填
+  title        text,                               -- 同上
+  note         text check (note is null or length(note) <= 200),
+  status       text not null default 'pending'
+               check (status in ('pending', 'done', 'skipped')),
+  -- 刪除使用者不該連帶刪掉佇列項目（別人也可能在等這集），
+  -- 也不該被 FK 擋住，故留 null。
+  added_by     uuid references users(id) on delete set null,
+  created_at   timestamptz default now(),
+  processed_at timestamptz
+);
+
+-- 同一網址只允許一筆待處理；標記 done 或 skipped 後可再次貼同一網址。
+create unique index if not exists queue_url_pending_idx
+  on queue (url) where status = 'pending';
+
+-- 兩端的清單都只查 pending 並依時間排序，索引直接涵蓋該查詢。
+create index if not exists queue_pending_idx
+  on queue (created_at desc) where status = 'pending';

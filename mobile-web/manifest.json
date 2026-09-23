@@ -31,5 +31,39 @@
       "type": "image/png",
       "purpose": "maskable"
     }
+  ],
+  "scope": "./",
+  "lang": "zh-Hant",
+  "dir": "ltr",
+  "orientation": "portrait",
+  "categories": [
+    "productivity",
+    "utilities"
+  ],
+  "shortcuts": [
+    {
+      "name": "加入待處理",
+      "short_name": "待處理",
+      "description": "貼上單集網址，回家再轉錄",
+      "url": "./index.html#/?queue=open",
+      "icons": [
+        {
+          "src": "icons/icon-192.png",
+          "sizes": "192x192"
+        }
+      ]
+    },
+    {
+      "name": "我的收藏",
+      "short_name": "收藏",
+      "description": "已收藏的集數",
+      "url": "./index.html#/favorites",
+      "icons": [
+        {
+          "src": "icons/icon-192.png",
+          "sizes": "192x192"
+        }
+      ]
+    }
   ]
 }

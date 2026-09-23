@@ -15,7 +15,7 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
@@ -112,6 +112,7 @@ class ProcessRequest(BaseModel):
     url: str
     force: str | None = None
     num_speakers: int | None = None
+    queue_id: str | None = None  # 由待處理清單觸發時帶入，供回填標題與結案
 
 
 class SpeakersRequest(BaseModel):
@@ -127,6 +128,12 @@ def start_process(req: ProcessRequest) -> dict:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     guid = episode.episode_guid
+    # 手機端入列時不解析網址，這裡補上 guid 與標題讓待處理清單看得懂。
+    if req.queue_id:
+        upload.annotate_queue_item(
+            req.queue_id, episode_guid=guid, title=episode.title
+        )
+
     with _lock:
         running = _jobs.get(guid)
         if running and not running.done:
@@ -219,6 +226,22 @@ def resume_job(guid: str) -> dict:
     )
     thread.start()
     return job.to_dict()
+
+
+@app.get("/api/queue")
+def list_queue() -> list[dict]:
+    """手機端貼上的待處理網址。實際下載與轉錄由使用者手動觸發。"""
+    return upload.fetch_queue()
+
+
+@app.delete("/api/queue/{item_id}")
+def remove_queue_item(item_id: str) -> dict:
+    """從待處理清單移除（決定不處理這集）。"""
+    try:
+        upload.remove_queue_item(item_id)
+    except upload.UploadError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return {"removed": item_id}
 
 
 @app.get("/api/episodes")
@@ -393,11 +416,18 @@ def regenerate(guid: str) -> dict:
 
 @app.post("/api/episodes/{guid}/upload")
 def upload_episode(guid: str) -> dict:
-    """上傳結果至 Supabase。手動觸發，不會自動執行（spec §11 決策 10）。"""
+    """上傳結果至 Supabase。手動觸發，不會自動執行（spec §11 決策 10）。
+
+    上傳成功代表這集已完成，對應的待處理項目一併結案；
+    手機端的待處理清單因此不需使用者手動清掉。
+    """
     try:
-        return upload.upload(_episode_dir(guid))
+        result = upload.upload(_episode_dir(guid))
     except upload.UploadError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    upload.resolve_queue_item(guid)
+    return result
 
 
 @app.delete("/api/episodes/{guid}/audio")
@@ -426,6 +456,21 @@ def _episode_dir(guid: str) -> Path:
     return directory
 
 
-# 靜態檔案掛在最後，才不會蓋掉上面的 /api 路由。
+@app.get("/")
+def index() -> HTMLResponse:
+    """首頁。css/js 以檔案修改時間戳記，改版後瀏覽器必定重新抓取。
+
+    手動維護 ?v=N 容易忘記更新，導致改了樣式卻看到舊畫面；
+    改由伺服器在回應時填入 mtime，存檔即換網址。
+    """
+    html = (STATIC_DIR / "index.html").read_text(encoding="utf-8")
+    for name in ("style.css", "app.js"):
+        stamp = int((STATIC_DIR / name).stat().st_mtime)
+        html = html.replace(f'"{name}"', f'"{name}?v={stamp}"')
+    return HTMLResponse(html)
+
+
+# 靜態檔案掛在最後，才不會蓋掉上面的 /api 路由與首頁。
+# html=True 會讓 "/" 也交給 StaticFiles，故上面的 index 需先註冊。
 if STATIC_DIR.exists():
     app.mount("/", StaticFiles(directory=STATIC_DIR, html=True), name="web")

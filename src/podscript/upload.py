@@ -381,3 +381,102 @@ def fetch_existing_hashtags() -> list[str]:
         return []
 
     return sorted({row[0] for row in rows if row[0]})
+
+
+# ── 待處理佇列 ────────────────────────────────────────
+# 手機端只把網址存進 queue 表，下載與轉錄一律在本機端執行。
+
+
+def fetch_queue() -> list[dict]:
+    """取得待處理清單。
+
+    佇列是附屬功能，查詢失敗時回傳空列表而非拋例外，
+    不讓資料庫連不上擋住本機端列表頁的正常顯示。
+    """
+    url = os.environ.get("DATABASE_URL")
+    if not url:
+        return []
+
+    try:
+        with psycopg.connect(url, connect_timeout=CONNECT_TIMEOUT) as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "select id, url, episode_guid, title, note, created_at"
+                    " from queue where status = 'pending' order by created_at desc"
+                )
+                rows = cur.fetchall()
+    except psycopg.Error:
+        return []
+
+    return [
+        {
+            "id": str(row[0]),
+            "url": row[1],
+            "episode_guid": row[2],
+            "title": row[3],
+            "note": row[4],
+            "created_at": _iso(row[5]),
+        }
+        for row in rows
+    ]
+
+
+def annotate_queue_item(item_id: str, *, episode_guid: str, title: str) -> None:
+    """回填本機端解析出的 guid 與標題。
+
+    手機端入列時不解析網址，清單只看得到原始網址；
+    本機端一開始處理就補上，之後清單即可顯示集數標題。
+    失敗不拋例外：這只影響顯示，不該讓轉錄因此中止。
+    """
+    url = os.environ.get("DATABASE_URL")
+    if not url:
+        return
+
+    try:
+        with psycopg.connect(url, connect_timeout=CONNECT_TIMEOUT) as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "update queue set episode_guid = %s, title = %s where id = %s",
+                    (episode_guid, title, item_id),
+                )
+                conn.commit()
+    except psycopg.Error:
+        return
+
+
+def resolve_queue_item(episode_guid: str) -> None:
+    """把該集對應的待處理項目標記為已完成。
+
+    以 episode_guid 比對而非 id：同一集可能被不同人各貼一次，
+    處理完應一併消掉，不留下已無意義的重複項目。
+    """
+    url = os.environ.get("DATABASE_URL")
+    if not url:
+        return
+
+    try:
+        with psycopg.connect(url, connect_timeout=CONNECT_TIMEOUT) as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "update queue set status = 'done', processed_at = now()"
+                    " where episode_guid = %s and status = 'pending'",
+                    (episode_guid,),
+                )
+                conn.commit()
+    except psycopg.Error:
+        return
+
+
+def remove_queue_item(item_id: str) -> None:
+    """從佇列移除一筆（使用者決定不處理）。"""
+    url = os.environ.get("DATABASE_URL")
+    if not url:
+        raise UploadError("未設定 DATABASE_URL")
+
+    try:
+        with psycopg.connect(url, connect_timeout=CONNECT_TIMEOUT) as conn:
+            with conn.cursor() as cur:
+                cur.execute("delete from queue where id = %s", (item_id,))
+                conn.commit()
+    except psycopg.Error as exc:
+        raise UploadError(f"移除失敗：{exc}") from exc

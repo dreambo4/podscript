@@ -2,7 +2,7 @@
 <html lang="zh-Hant">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>podscript</title>
 <meta name="description" content="Podcast 逐字稿工具：分角色逐字稿、摘要、心智圖">
 
@@ -15,7 +15,14 @@
 
 <!-- PWA -->
 <link rel="manifest" href="manifest.json">
-<meta name="theme-color" content="#0f1210">
+<meta name="theme-color" content="#fdf3f6" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0f1210" media="(prefers-color-scheme: dark)">
+
+<!-- iOS 加到主畫面時以全螢幕開啟；狀態列文字色隨背景，避免淺色主題下看不見 -->
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="podscript">
 
 <!-- Open Graph（Facebook／LINE／Discord 等分享預覽卡片）-->
 <meta property="og:title" content="podscript">
@@ -29,7 +36,7 @@
 <meta name="twitter:description" content="Podcast 逐字稿工具：分角色逐字稿、摘要、心智圖">
 <meta name="twitter:image" content="icons/og-image.png">
 
-<link rel="stylesheet" href="style.css?v=9">
+<link rel="stylesheet" href="style.css?v=b0c003c5dfb6">
 <script src="config.js"></script>
 </head>
 <body>
@@ -72,6 +79,12 @@
     <symbol id="ic-sun" viewBox="0 0 24 24">
       <circle cx="12" cy="12" r="4.2" fill="none" stroke="currentColor" stroke-width="1.6"/>
       <path d="M12 2.5v2.6M12 18.9v2.6M4.6 4.6l1.85 1.85M17.55 17.55l1.85 1.85M2.5 12h2.6M18.9 12h2.6M4.6 19.4l1.85-1.85M17.55 6.45l1.85-1.85" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+    </symbol>
+    <symbol id="ic-chevron-up" viewBox="0 0 24 24">
+      <path d="m6 15 6-6 6 6" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/>
+    </symbol>
+    <symbol id="ic-trash" viewBox="0 0 24 24">
+      <path d="M4.5 7h15M9.5 7V5.2A1.2 1.2 0 0 1 10.7 4h2.6a1.2 1.2 0 0 1 1.2 1.2V7M6.5 7l.9 12.1a1.5 1.5 0 0 0 1.5 1.4h6.2a1.5 1.5 0 0 0 1.5-1.4L17.5 7" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
     </symbol>
     <symbol id="ic-moon" viewBox="0 0 24 24">
       <path d="M20 14.2A8.5 8.5 0 1 1 9.8 4a6.8 6.8 0 0 0 10.2 10.2Z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>
@@ -117,6 +130,28 @@
     </div>
 
     <div id="active-filters" class="active-filters" hidden></div>
+
+    <section id="queue-section" class="queue-section">
+      <button id="queue-toggle" class="queue-toggle" type="button" aria-expanded="false">
+        <span class="queue-toggle-title">
+          待處理
+          <span id="queue-count" class="queue-count" hidden>0</span>
+        </span>
+        <span class="queue-toggle-hint">貼上網址，回家再轉錄</span>
+        <svg class="icon icon-sm queue-chevron"><use href="#ic-chevron-up"/></svg>
+      </button>
+
+      <div id="queue-body" class="queue-body" hidden>
+        <form id="queue-form" class="queue-form">
+          <input id="queue-url" type="url" placeholder="貼上單集網址…" required inputmode="url" autocapitalize="off" autocorrect="off" spellcheck="false" maxlength="2048">
+          <input id="queue-note" type="text" placeholder="備註（選填）" maxlength="200">
+          <button type="submit" class="queue-add-btn">加入</button>
+        </form>
+        <p id="queue-msg" class="queue-msg" hidden></p>
+        <div id="queue-items" class="queue-items"></div>
+        <p id="queue-empty" class="muted queue-empty" hidden>目前沒有待處理的網址。</p>
+      </div>
+    </section>
 
     <div id="list-scroll" class="list-scroll">
       <p id="list-loading" class="muted loading-row" hidden><span class="spinner"></span> 載入中…</p>
@@ -230,7 +265,7 @@
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
-<script src="app.js?v=11"></script>
+<script src="app.js?v=e33c6af25156"></script>
 <script src="https://accounts.google.com/gsi/client" async defer onload="initGoogleSignIn()"></script>
 </body>
 </html>

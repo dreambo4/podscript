@@ -46,6 +46,81 @@ body {
   padding: 16px;
 }
 
+/* ── 手機待處理（由手機端貼入，在此手動開始處理）────────── */
+.queue-box {
+  margin-bottom: 16px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--line);
+}
+
+.queue-box h2 {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0 0 8px;
+  font-size: 14px;
+  color: var(--muted);
+}
+
+.queue-count {
+  min-width: 18px;
+  padding: 0 5px;
+  border-radius: 9px;
+  background: var(--accent);
+  color: #fff;
+  font-size: 11px;
+  line-height: 18px;
+  text-align: center;
+}
+
+.queue-list { list-style: none; margin: 0; padding: 0; }
+
+.queue-list li {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  padding: 8px 0;
+  border-bottom: 1px dashed var(--line);
+}
+.queue-list li:last-child { border-bottom: none; }
+
+.queue-item-body { flex: 1; min-width: 0; }
+
+/* 未經本機端解析前只有原始網址，限三行避免單筆撐爆側欄 */
+.queue-item-title {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  font-size: 12px;
+  line-height: 1.5;
+  word-break: break-all;
+}
+
+.queue-item-note { display: block; font-size: 11px; color: var(--muted); margin-top: 2px; }
+
+.queue-item-status {
+  display: block;
+  font-size: 11px;
+  color: var(--accent);
+  margin-top: 2px;
+}
+.queue-item-status.failed { color: var(--warn); }
+
+.queue-actions { display: flex; gap: 4px; margin-top: 6px; }
+
+.queue-actions button {
+  padding: 3px 8px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #fff;
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+}
+.queue-actions button.go { border-color: var(--accent); color: var(--accent); }
+.queue-actions button:disabled { opacity: .5; cursor: default; }
+
 .sidebar-head h2 { margin: 0 0 10px; font-size: 14px; color: var(--muted); }
 
 #filter {

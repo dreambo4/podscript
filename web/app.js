@@ -314,7 +314,8 @@ $("btn-upload").addEventListener("click", async (e) => {
     current.uploaded_at = new Date().toISOString();
     current.has_audio = false; // 上傳成功後音檔已自動清除
     renderUploadState();
-    await loadLibrary();
+    // 後端在上傳成功時把對應的待處理項目標記為完成，這裡刷新讓它消失
+    await Promise.all([loadLibrary(), loadQueue()]);
 
     const freed = res.freed_bytes
       ? `，釋出 ${(res.freed_bytes / 1048576).toFixed(0)} MB`
@@ -399,9 +400,93 @@ function downloadMarkdown(parts) {
 let libraryTimer = null;
 let allEpisodes = [];
 
+// ── 手機待處理 ──────────────────────────────────────
+// 手機端只存網址，解析、下載與轉錄都在這裡手動觸發。
+
+// null 代表尚未載入；loadLibrary 先於 loadQueue 完成時據此跳過重畫，
+// 避免整區先隱藏再出現的閃動。
+let queueItems = null;
+
+async function loadQueue() {
+  try {
+    queueItems = await api("/api/queue");
+  } catch (err) {
+    // 待處理是附屬功能，資料庫連不上時不該讓左側清單整個掛掉
+    console.error(err);
+    return;
+  }
+  renderQueue();
+}
+
+function renderQueue() {
+  if (queueItems === null) return;  // 尚未載入，交給 loadQueue 完成時再畫
+
+  $("queue-box").hidden = queueItems.length === 0;
+  $("queue-count").textContent = queueItems.length;
+
+  const list = $("queue-list");
+  list.innerHTML = "";
+
+  queueItems.forEach((item) => {
+    // 開始處理時後端已回填 episode_guid，據此比對該集目前的狀態。
+    // 已在處理中就不該能再按一次，否則會重複送出同一集。
+    const episode = item.episode_guid
+      ? allEpisodes.find((e) => e.guid === item.episode_guid)
+      : null;
+    const processing = Boolean(episode && episode.processing);
+    const failed = Boolean(episode && episode.error);
+
+    const li = document.createElement("li");
+    li.innerHTML = `
+      <div class="queue-item-body">
+        <span class="queue-item-title">${escapeHtml(item.title || item.url)}</span>
+        ${item.note ? `<span class="queue-item-note">${escapeHtml(item.note)}</span>` : ""}
+        ${processing ? `<span class="queue-item-status">處理中…${escapeHtml(episode.message || "")}</span>` : ""}
+        ${failed ? `<span class="queue-item-status failed">處理失敗，可再試一次</span>` : ""}
+        <div class="queue-actions">
+          <button type="button" class="go"${processing ? " disabled" : ""}>${failed ? "▶ 重新處理" : "▶ 開始處理"}</button>
+          <button type="button" class="del"${processing ? " disabled" : ""}>移除</button>
+        </div>
+      </div>
+    `;
+
+    li.querySelector(".go").addEventListener("click", async (e) => {
+      const buttons = li.querySelectorAll("button");
+      buttons.forEach((b) => (b.disabled = true));
+      try {
+        // 帶 queue_id 讓後端回填解析出的標題；結案在上傳成功時才做。
+        const job = await api("/api/process", {
+          method: "POST",
+          body: { url: item.url, queue_id: item.id },
+        });
+        location.hash = job.guid;
+        await Promise.all([loadLibrary(), loadQueue()]);
+      } catch (err) {
+        alert(err.message);
+        buttons.forEach((b) => (b.disabled = false));
+      }
+    });
+
+    li.querySelector(".del").addEventListener("click", async () => {
+      try {
+        await api(`/api/queue/${item.id}`, { method: "DELETE" });
+        queueItems = queueItems.filter((i) => i.id !== item.id);
+        renderQueue();
+      } catch (err) {
+        alert(err.message);
+      }
+    });
+
+    list.appendChild(li);
+  });
+}
+
 async function loadLibrary() {
   allEpisodes = await api("/api/episodes");
   renderLibrary();
+  // 待處理項目的「處理中」狀態取自 allEpisodes，故一併重畫；
+  // 轉錄期間靠下面的輪詢，進度會跟著更新。
+  renderQueue();
 
   // 有任務在跑就定期刷新清單，讓狀態自動更新。
   if (allEpisodes.some((e) => e.processing)) {
@@ -540,3 +625,4 @@ async function openFromHash() {
 window.addEventListener("hashchange", openFromHash);
 
 loadLibrary().then(openFromHash);
+loadQueue();
