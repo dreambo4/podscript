@@ -185,9 +185,10 @@ def summarize(
     # 延遲匯入避免與 upload 模組的循環參照（upload 匯入 pipeline 取得 Result）。
     from . import upload as _upload
 
-    existing_hashtags = _upload.fetch_existing_hashtags()
-    generated.hashtags = summary.reconcile_hashtags(
-        generated.hashtags, existing_hashtags
+    # 合併建議待使用者確認，確認前 hashtags 維持原始標籤，不自動合併。
+    generated.hashtags_generated = list(generated.hashtags)
+    generated.hashtag_merges = summary.find_hashtag_merges(
+        generated.hashtags, _upload.fetch_existing_hashtags()
     )
 
     directory.mkdir(parents=True, exist_ok=True)
@@ -258,6 +259,23 @@ def load_summary(directory: Path) -> dict | None:
     if not path.exists():
         return None
     return json.loads(path.read_text(encoding="utf-8"))
+
+
+def decide_hashtag_merges(directory: Path, decisions: dict[str, str]) -> dict:
+    """套用使用者對標籤合併建議的決定並寫回 result.json。
+
+    Raises:
+        FileNotFoundError: 該目錄沒有摘要結果。
+        ValueError: 決定內容不符合合併建議，見 summary.decide_hashtag_merges。
+    """
+    data = load_summary(directory)
+    if data is None:
+        raise FileNotFoundError(directory / "result.json")
+    summary.decide_hashtag_merges(data, decisions)
+    (directory / "result.json").write_text(
+        json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8"
+    )
+    return data
 
 
 def rename_speakers(directory: Path, speakers: dict[str, str]) -> Result:

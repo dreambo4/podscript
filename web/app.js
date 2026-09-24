@@ -185,6 +185,7 @@ async function showEpisode(guid) {
 }
 
 function renderSummary(summary) {
+  renderTagReview(summary);
   if (!summary) {
     $("summary-text").textContent = "尚未生成";
     $("hashtags").innerHTML = "";
@@ -197,6 +198,64 @@ function renderSummary(summary) {
     .map((t) => `<span>#${escapeHtml(t)}</span>`)
     .join("");
   renderMindmap(summary.mindmap);
+}
+
+// ── 標籤合併確認 ────────────────────────────────────
+
+function pendingMerges(summary) {
+  return (summary?.hashtag_merges || []).filter((m) => m.keep == null);
+}
+
+/**
+ * AI 建議把新標籤合併為既有標籤時，逐項由使用者決定保留哪一個。
+ * 未決定前標籤維持原樣，且不能上傳（後端同樣會擋）。
+ */
+function renderTagReview(summary) {
+  const box = $("tag-review");
+  const merges = summary?.hashtag_merges || [];
+  box.hidden = merges.length === 0;
+  if (!merges.length) {
+    box.innerHTML = "";
+    return;
+  }
+
+  const pending = pendingMerges(summary).length;
+  const head = pending
+    ? `標籤合併待確認（剩 ${pending} 項），全部確認後才能上傳`
+    : "標籤合併已確認，可再點選修改";
+  const cell = (i, m, side) => {
+    const chosen = m.keep === m[side] ? ' class="chosen"' : "";
+    return `<td><button type="button"${chosen} data-i="${i}" data-side="${side}">${escapeHtml(m[side])}</button></td>`;
+  };
+
+  box.innerHTML = `<p class="tag-review-head${pending ? " pending" : ""}">${head}</p>
+    <table>
+      <thead><tr><th>保留原標籤</th><th>改用既有標籤</th></tr></thead>
+      <tbody>${merges
+        .map((m, i) => `<tr>${cell(i, m, "from")}${cell(i, m, "to")}</tr>`)
+        .join("")}</tbody>
+    </table>`;
+
+  box.querySelectorAll("button").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const m = merges[Number(btn.dataset.i)];
+      decideMerge(m.from, m[btn.dataset.side]);
+    });
+  });
+}
+
+async function decideMerge(from, keep) {
+  try {
+    const summary = await api(`/api/episodes/${current.guid}/hashtags`, {
+      method: "PUT",
+      body: { decisions: { [from]: keep } },
+    });
+    current.summary = summary;
+    renderSummary(summary);
+    renderUploadState();
+  } catch (err) {
+    alert(err.message);
+  }
 }
 
 function renderMindmap(code) {
@@ -282,6 +341,7 @@ $("btn-regen").addEventListener("click", async (e) => {
     });
     current.summary = summary;
     renderSummary(summary);
+    renderUploadState();
   } catch (err) {
     alert(err.message);
   } finally {
@@ -315,7 +375,7 @@ $("btn-upload").addEventListener("click", async (e) => {
     alert(err.message);
     renderUploadState();
   } finally {
-    btn.disabled = false;
+    btn.disabled = pendingMerges(current?.summary).length > 0;
   }
 });
 
@@ -358,6 +418,9 @@ function renderUploadState() {
   $("ep-meta").textContent = meta.join(" · ");
 
   $("btn-upload").textContent = uploaded ? "再次上傳" : "上傳";
+  const pending = pendingMerges(current.summary).length > 0;
+  $("btn-upload").disabled = pending;
+  $("btn-upload").title = pending ? "標籤合併尚未確認" : "";
 }
 
 // ── 下載 ────────────────────────────────────────────

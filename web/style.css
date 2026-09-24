@@ -287,6 +287,36 @@ button:disabled { opacity: .5; cursor: default; }
   font-size: 13px;
 }
 
+/* 標籤合併確認 */
+.tag-review {
+  margin-top: 12px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
+.tag-review-head { margin: 0 0 8px; font-size: 13px; color: var(--muted); }
+.tag-review-head.pending { color: var(--warn); font-weight: 600; }
+
+.tag-review table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+
+.tag-review th {
+  padding: 4px 6px;
+  font-size: 12px;
+  font-weight: normal;
+  color: var(--muted);
+  text-align: left;
+}
+
+.tag-review td { padding: 4px 6px; border-top: 1px solid var(--line); }
+.tag-review td button { width: 100%; padding: 6px 10px; font-size: 14px; text-align: left; }
+
+.tag-review td button.chosen {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
 /* 進度條 */
 .stages { display: flex; gap: 4px; list-style: none; margin: 16px 0 8px; padding: 0; flex-wrap: wrap; }
 

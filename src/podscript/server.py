@@ -119,6 +119,11 @@ class SpeakersRequest(BaseModel):
     speakers: dict[str, str]
 
 
+class HashtagDecisionRequest(BaseModel):
+    # {新標籤: 要保留的標籤}，值為合併前的新標籤或建議的既有標籤。
+    decisions: dict[str, str]
+
+
 @app.post("/api/process")
 def start_process(req: ProcessRequest) -> dict:
     """解析網址並在背景開始處理。"""
@@ -412,6 +417,21 @@ def regenerate(guid: str) -> dict:
     if generated is None:
         raise HTTPException(status_code=502, detail="摘要生成失敗，請稍後再試")
     return generated.to_dict()
+
+
+@app.put("/api/episodes/{guid}/hashtags")
+def decide_hashtags(guid: str, req: HashtagDecisionRequest) -> dict:
+    """確認標籤合併建議：逐項決定保留原標籤或改用既有標籤。
+
+    合併建議只存在本機 result.json（重新生成後產生），
+    全部決定完才能上傳，見 upload.upload。
+    """
+    try:
+        return pipeline.decide_hashtag_merges(_episode_dir(guid), req.decisions)
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail="這集沒有待確認的標籤") from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 @app.post("/api/episodes/{guid}/upload")

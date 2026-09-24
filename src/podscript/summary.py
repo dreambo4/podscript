@@ -12,7 +12,7 @@ import json
 import re
 import subprocess
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 PROMPT = """請讀取 {path}，這是一集 Podcast 的逐字稿。
@@ -46,8 +46,16 @@ RECONCILE_PROMPT = """現有標籤庫：
 本集新產生的標籤：
 {new_tags}
 
-請判斷每個「新標籤」是否與「現有標籤庫」中某個標籤語意相同或高度重疊
-（例如「不動產」與「房地產」視為相同）。
+請判斷每個「新標籤」是否與「現有標籤庫」中某個標籤為同義詞，
+即換成該現有標籤後意思不變。以下都算同義，應對應到現有標籤：
+- 同義用詞（例如「不動產」對應「房地產」）
+- 縮寫或外文名稱（例如「ADHD」對應「注意力不足」）
+- 語序或字詞微調（例如「理財投資」對應「投資理財」）
+
+以下不算同義，輸出 null：
+- 範圍較小或較大的相關概念（例如「買房殺價」不等於「房地產」）
+- 同一領域但不同面向（例如「房貸」不等於「投資理財」）
+- 字面相近但指涉不同（例如「職場心理」不等於「心理健康」）
 
 輸出格式（只輸出 JSON，不要任何說明文字），鍵為新標籤、值為對應的現有標籤：
 {{"新標籤一": "現有標籤X", "新標籤二": null}}
@@ -64,12 +72,18 @@ class Summary:
     hashtags: list[str]
     model: str
     usage: dict
+    # 標籤收斂的合併建議，每項為 {"from", "to", "keep"}；見 find_hashtag_merges。
+    hashtag_merges: list[dict] = field(default_factory=list)
+    # 合併前的原始標籤，供使用者改變決定時重新計算 hashtags。
+    hashtags_generated: list[str] = field(default_factory=list)
 
     def to_dict(self) -> dict:
         return {
             "summary": self.summary,
             "mindmap": self.mindmap,
             "hashtags": self.hashtags,
+            "hashtag_merges": self.hashtag_merges,
+            "hashtags_generated": self.hashtags_generated,
             "model": self.model,
             "usage": self.usage,
         }
@@ -220,19 +234,26 @@ def _extract_json(text: str) -> dict:
         raise SummaryError(f"JSON 解析失敗：{text[start:start + 200]}") from exc
 
 
-def reconcile_hashtags(
+def find_hashtag_merges(
     hashtags: list[str], existing: list[str], *, timeout: int = 120
-) -> list[str]:
-    """把新標籤與既有標籤庫比對，同義者收斂為既有標籤。
+) -> list[dict]:
+    """把新標籤與既有標籤庫比對，找出可收斂為既有標籤的同義者。
 
     另開一次獨立呼叫而非在生成 prompt 中帶入標籤庫，是為了不讓 AI
     生成階段趨向「挑選既有標籤」而犧牲對本集內容的精準命名。
 
-    失敗（無標籤庫、CLI 錯誤、逾時、回傳格式異常）一律回傳原始 hashtags：
+    只回傳合併建議，不直接替換：AI 的同義判斷不穩定且常過度合併，
+    是否合併由使用者逐項確認（見 decide_hashtag_merges）。
+
+    失敗（無標籤庫、CLI 錯誤、逾時、回傳格式異常）一律回傳空列表：
     標籤收斂是附加的品質改善，不可讓其失敗擋住摘要結果的可用性。
+
+    Returns:
+        每項為 {"from": 新標籤, "to": 既有標籤, "keep": None}，
+        keep 待使用者決定。
     """
     if not hashtags or not existing:
-        return hashtags
+        return []
 
     try:
         proc = subprocess.run(
@@ -254,26 +275,66 @@ def reconcile_hashtags(
             stdin=subprocess.DEVNULL,
         )
     except (subprocess.TimeoutExpired, FileNotFoundError):
-        return hashtags
+        return []
 
     if proc.returncode != 0:
-        return hashtags
+        return []
 
     try:
         envelope = json.loads(proc.stdout)
         mapping = _extract_json(envelope.get("result", ""))
     except (json.JSONDecodeError, SummaryError):
-        return hashtags
+        return []
 
     if not isinstance(mapping, dict):
-        return hashtags
+        return []
 
-    resolved = [mapping.get(tag) or tag for tag in hashtags]
-    deduped = []
-    for tag in resolved:
-        if isinstance(tag, str) and tag and tag not in deduped:
-            deduped.append(tag)
-    return deduped or hashtags
+    # 只接受標籤庫中確實存在的對應，避免 AI 自創標籤混入。
+    return [
+        {"from": tag, "to": mapping[tag], "keep": None}
+        for tag in hashtags
+        if isinstance(mapping.get(tag), str)
+        and mapping[tag] in existing
+        and mapping[tag] != tag
+    ]
+
+
+def pending_hashtag_merges(summary: dict) -> list[dict]:
+    """尚未決定的合併建議。有任何一項未決定前不可上傳。"""
+    return [m for m in summary.get("hashtag_merges") or [] if m.get("keep") is None]
+
+
+def decide_hashtag_merges(summary: dict, decisions: dict[str, str]) -> dict:
+    """套用使用者對合併建議的決定，重新計算標籤。
+
+    Args:
+        summary: result.json 的內容，會直接修改。
+        decisions: {新標籤: 要保留的標籤}，值須為該項的 from 或 to。
+            未列出的項目維持原狀，可分次決定、也可改變先前的決定。
+
+    Raises:
+        ValueError: 新標籤不在合併建議中，或保留的標籤不是 from/to 之一。
+    """
+    merges = summary.get("hashtag_merges") or []
+    by_from = {m["from"]: m for m in merges}
+    for tag, keep in decisions.items():
+        merge = by_from.get(tag)
+        if merge is None:
+            raise ValueError(f"「{tag}」沒有待確認的合併")
+        if keep not in (merge["from"], merge["to"]):
+            raise ValueError(f"「{tag}」只能保留「{merge['from']}」或「{merge['to']}」")
+        merge["keep"] = keep
+
+    # 從合併前的原始標籤重算，保持生成時的順序；
+    # 決定合併者換成既有標籤，多個標籤合併為同一個時只留一個。
+    chosen = {m["from"]: m["keep"] for m in merges if m["keep"] is not None}
+    tags = []
+    for tag in summary.get("hashtags_generated") or summary.get("hashtags", []):
+        final = chosen.get(tag, tag)
+        if final not in tags:
+            tags.append(final)
+    summary["hashtags"] = tags
+    return summary
 
 
 def get_provider(name: str = "claude_cli") -> SummaryProvider:

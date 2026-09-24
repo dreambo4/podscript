@@ -20,6 +20,7 @@ from pathlib import Path
 import psycopg
 
 from . import diarize, pipeline
+from .summary import pending_hashtag_merges
 from .resolvers import Episode
 
 CONNECT_TIMEOUT = 20
@@ -70,11 +71,16 @@ def upload(directory: Path, *, discard: bool = True) -> dict:
         含 id、是否為新增、資料大小與釋出空間的結果。
 
     Raises:
-        UploadError: 未設定 DATABASE_URL、尚未處理完成，或資料庫寫入失敗。
+        UploadError: 未設定 DATABASE_URL、尚未處理完成、標籤合併尚未確認，
+            或資料庫寫入失敗。
     """
     url = os.environ.get("DATABASE_URL")
     if not url:
         raise UploadError("未設定 DATABASE_URL，無法上傳")
+
+    pending = pending_hashtag_merges(pipeline.load_summary(directory) or {})
+    if pending:
+        raise UploadError(f"還有 {len(pending)} 個標籤合併尚未確認，確認後才能上傳")
 
     payload = build_payload(directory)
 

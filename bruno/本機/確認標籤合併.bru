@@ -1,0 +1,26 @@
+meta {
+  name: 確認標籤合併
+  type: http
+  seq: 15
+}
+
+put {
+  url: {{localBase}}/api/episodes/{{guid}}/hashtags
+  body: json
+  auth: none
+}
+
+body:json {
+  {
+    "decisions": {
+      "家庭教育": "親子教養",
+      "親子關係": "親子關係"
+    }
+  }
+}
+
+docs {
+  重新生成後若有標籤合併建議，逐項決定保留原標籤或改用既有標籤。
+  鍵為合併前的新標籤，值為要保留的標籤（只能是該新標籤或建議的既有標籤）。
+  可分次送出；全部決定完才能上傳。
+}
