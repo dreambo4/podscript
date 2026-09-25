@@ -510,6 +510,9 @@ function renderQueue() {
       : null;
     const processing = Boolean(episode && episode.processing);
     const failed = Boolean(episode && episode.error);
+    // 已處理完成但尚未上傳：項目要到上傳成功才結案，這段期間不能再開始處理，
+    // 改成「查看」直接跳到該集。
+    const done = Boolean(episode && episode.ready && !processing && !failed);
 
     const li = document.createElement("li");
     li.innerHTML = `
@@ -518,14 +521,24 @@ function renderQueue() {
         ${item.note ? `<span class="queue-item-note">${escapeHtml(item.note)}</span>` : ""}
         ${processing ? `<span class="queue-item-status">處理中…${escapeHtml(episode.message || "")}</span>` : ""}
         ${failed ? `<span class="queue-item-status failed">處理失敗，可再試一次</span>` : ""}
+        ${done ? `<span class="queue-item-status">已處理完成，待上傳</span>` : ""}
         <div class="queue-actions">
-          <button type="button" class="go"${processing ? " disabled" : ""}>${failed ? "▶ 重新處理" : "▶ 開始處理"}</button>
+          ${
+            done
+              ? `<button type="button" class="view">查看</button>`
+              : `<button type="button" class="go"${processing ? " disabled" : ""}>${failed ? "▶ 重新處理" : "▶ 開始處理"}</button>`
+          }
           <button type="button" class="del"${processing ? " disabled" : ""}>移除</button>
         </div>
       </div>
     `;
 
-    li.querySelector(".go").addEventListener("click", async (e) => {
+    li.querySelector(".view")?.addEventListener("click", () => {
+      location.hash = item.episode_guid;
+      closeSidebar();
+    });
+
+    li.querySelector(".go")?.addEventListener("click", async (e) => {
       const buttons = li.querySelectorAll("button");
       buttons.forEach((b) => (b.disabled = true));
       try {
