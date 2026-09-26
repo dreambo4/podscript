@@ -625,6 +625,7 @@ body {
 .tag-row.selected {
   background: var(--accent-soft);
   margin: 0 -10px;
+  width: calc(100% + 20px);
   padding-left: 12px;
   padding-right: 12px;
   border-radius: 10px;
