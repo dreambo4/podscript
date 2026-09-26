@@ -170,6 +170,8 @@ async function openEpisode(guid) {
 
 async function showEpisode(guid) {
   const data = await api(`/api/episodes/${guid}`);
+  // 回應到達前使用者已切到別集：丟棄，否則舊集會蓋掉新集的畫面。
+  if (location.hash.slice(1) !== guid) return;
   current = { guid, ...data };
 
   $("empty").hidden = true;
@@ -739,6 +741,7 @@ async function openFromHash() {
   try {
     await openEpisode(guid);
   } catch {
+    if (location.hash.slice(1) !== guid) return; // 已切到別集，錯誤不影響目前畫面
     $("empty").hidden = false;
     $("progress").hidden = true;
     $("episode").hidden = true;

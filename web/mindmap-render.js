@@ -86,6 +86,14 @@ export function renderMindmap(code, el, { rootColor = ROOT_COLOR, interactive = 
     ...(interactive ? {} : { zoom: false, autoFit: true }),
   }, root);
   if (interactive) boundZoom(mm);
+  // 容器隱藏時（已切到別集或別的分頁）寬高為 0，fit 會算出 NaN 縮放寫進 transform。
+  // 延遲置中、autoFit、重置按鈕都會呼叫 fit，故在實例上統一略過；
+  // 重新顯示時本機會重繪、手機縮圖由 autoFit 重新置中。
+  const fit = mm.fit.bind(mm);
+  mm.fit = (...args) => {
+    const { width, height } = svg.getBoundingClientRect();
+    return width && height ? fit(...args) : Promise.resolve();
+  };
   // 首次 fit 時節點展開動畫與文字量測未必完成，大張圖會有邊緣被切掉；稍後再對齊一次。
   setTimeout(() => mm.fit(), 600);
   return mm;
