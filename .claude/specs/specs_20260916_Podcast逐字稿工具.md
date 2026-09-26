@@ -52,14 +52,14 @@
 **視覺化版本（含色彩區分、資料流箭頭）：`.claude/architecture/architecture_20260918.html`，用瀏覽器開啟即可檢視**
 
 ### 範圍內
-- 接收 **Apple Podcast** 單集網址
+- 接收 **Apple Podcast** 單集網址、**YouTube** 影片網址（只取音軌，見 §4.1.1）
 - 本機轉錄、說話者分離、摘要、心智圖
 - 本機網頁：檢視、改說話者名稱、重新生成、下載
 - 手動上傳結果至 Supabase
 - 手機網頁：搜尋、瀏覽（唯讀）
 
 ### 不在範圍內
-- 其他 Podcast 平台（Spotify、KKBOX、YouTube…）→ 架構預留擴充點，本階段不實作
+- 其他平台（Spotify、KKBOX…）→ 架構預留擴充點，本階段不實作
 - 手機端觸發轉錄
 - 音檔上雲（mp3 只留本機）
 - 權限分級
@@ -117,6 +117,36 @@
 ```
 
 **擴充點：** 解析層做成 `PlatformResolver` 介面，輸入 URL 輸出 `{title, mp3_url, duration, published_at}`。新增平台只實作一個 resolver，不動下游流程。
+沒有音檔直連的平台覆寫 `download()`（預設以 HTTP 下載 `mp3_url`）；快取與暫存檔處理仍在 `audio.download_mp3`。
+
+### 4.1.1 YouTube（2026-09-27 新增）
+
+YouTube 串流網址帶簽章且會過期，沒有固定的 mp3 直連，解析與下載都交給 `yt-dlp`：
+
+```
+輸入：youtu.be/<id>、youtube.com/watch?v=<id>、/live/<id>、/shorts/<id>、m./music. 子網域
+  │
+  ├─ 取 11 碼影片 id，改用標準網址 youtube.com/watch?v=<id>
+  │     （去掉 list= 播放清單與 si= 分享追蹤參數，存入 source_url）
+  │
+  ├─ yt-dlp 只取資訊（不下載）→ 標題、頻道、長度、上傳時間、簡介
+  │
+  └─ yt-dlp 只下載純音軌（format=bestaudio，不下載影像）→ ffmpeg 轉 128kbps mp3
+        實測：48 分鐘影片，36 秒下載完成，46 MB
+```
+
+| Episode 欄位 | YouTube 來源 |
+|---|---|
+| `platform` | `youtube` |
+| `episode_guid` | `yt_<影片 id>` |
+| `podcast_name` | 頻道名稱 |
+| `mp3_url` | 空字串（由 `download()` 取得） |
+| `published_at` | `timestamp`，沒有時退回只有日期的 `upload_date` |
+
+- yt-dlp 需要 JavaScript 執行環境通過 YouTube 驗證：依序用本機的 deno、node（實測 node v22 可用）
+- 直播中、預定直播、直播存檔處理中 → 回報錯誤，不處理
+- 會員限定、年齡限制、私人影片需登入 cookie → 不支援，直接顯示 yt-dlp 的錯誤
+- YouTube 改版常使舊版 yt-dlp 失效，下載失敗先升級：`./venv/bin/pip install -U "yt-dlp[default]"`
 
 **注意：** mp3 URL 可能帶時效性參數（Firstory 為 `?v=<timestamp>`），日後可能失效。逐字稿必須存**完整文字**，不可依賴回頭讀音檔。
 
@@ -576,11 +606,12 @@ claude -p "$(cat prompt.txt)" --model sonnet --output-format json > result_sonne
 |---|---|---|---|
 | whisper.cpp | `brew install whisper-cpp`（官方 formula） | Homebrew | ~50 MB |
 | 模型 large-v2 + large-v3 | HuggingFace `ggerganov/whisper.cpp`（官方） | `~/Project/podscript/models/` | ~3 GB |
-| Python venv | PyPI：`pyannote.audio`、`opencc`、`fastapi`、`uvicorn`、`supabase` | `~/Project/podscript/venv/` | ~2.5 GB |
+| Python venv | PyPI：`pyannote.audio`、`opencc`、`fastapi`、`uvicorn`、`supabase` | 專案根目錄 `./venv/` | ~2.5 GB |
+| yt-dlp（2026-09-27 同意） | PyPI：`yt-dlp[default]`（含 yt-dlp-ejs、pycryptodomex、brotli、mutagen） | 專案根目錄 `./venv/` | 實測 40 MB |
 | **合計** | | | **~6 GB** |
 
 **環境：** M1 Mac mini / 16 GB RAM / 磁碟可用 44 GB。
-**隔離：** 全新 venv，不動 `~/Project/markitdown/venv`。
+**隔離：** 全新 venv，不動其他專案的 venv（如 markitdown）。
 
 ---
 
@@ -665,3 +696,4 @@ claude -p "$(cat prompt.txt)" --model sonnet --output-format json > result_sonne
 | v2 | 2026-09-17 | §9.1／§9.2 實測定案（large-v2、Opus）；新增 hashtags 欄位；修正 OpenCC 模式為 `s2tw`；修正 whisper.cpp 參數（`--max-context 0`）；記錄 `--prompt` 實測無效 |
 | v3 | 2026-09-17 | 手機端動工：新增 §11 決策 14/15（Railway + Firebase Hosting，前後端分離） |
 | v4 | 2026-09-18 | §1 架構圖補上手機端唯讀查詢區塊（mobile-web/mobile-backend/Railway），並附視覺化 Artifact 連結；補充「兩套服務唯一交集是 Supabase」「本機輪詢與 Railway 無關」說明 |
+| v5 | 2026-09-27 | 新增 YouTube 支援（§1 範圍、§4.1.1、§10 安裝清單）；resolver 介面新增 `download()`；venv 路徑改為通用的專案根目錄 `./venv/` |

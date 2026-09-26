@@ -814,17 +814,52 @@ function formatTime(sec) {
   return `${m}:${String(s).padStart(2, "0")}`;
 }
 
-function renderTranscript(segments, speakers) {
+const PLATFORM_LABELS = { apple: "Apple Podcasts", youtube: "YouTube" };
+
+/**
+ * 只接受 https 網址。source_url 會放進 href，
+ * 擋掉 javascript: 等 scheme（本機端 Apple 的網址判斷只看是否含網域字串）。
+ */
+function safeSourceUrl(url) {
+  return /^https:\/\//i.test(url || "") ? url : null;
+}
+
+/** YouTube 單集指定秒數的影片連結；非 YouTube 回傳 null。 */
+function youtubeTimeUrl(ep, seconds) {
+  if (ep.platform !== "youtube") return null;
+  const source = safeSourceUrl(ep.source_url);
+  if (!source) return null;
+  const url = new URL(source);
+  url.searchParams.set("t", `${Math.floor(seconds)}s`);
+  return url.href;
+}
+
+function renderSourceLink(ep) {
+  const link = document.querySelector("#ep-source");
+  const url = safeSourceUrl(ep.source_url);
+  link.hidden = !url;
+  if (!url) return;
+  link.href = url;
+  link.querySelector("span").textContent = `在 ${PLATFORM_LABELS[ep.platform] || "原平台"} 開啟`;
+}
+
+function renderTranscript(ep) {
   const container = document.querySelector("#transcript");
+  const speakers = ep.speakers || {};
   container.innerHTML = "";
-  segments.forEach(seg => {
-    const name = (speakers || {})[seg.speaker] || seg.speaker;
+  (ep.transcript || []).forEach(seg => {
+    const name = speakers[seg.speaker] || seg.speaker;
     const div = document.createElement("div");
     div.className = "seg" + (seg.confidence < 0.6 ? " low" : "");
+    // 只有 YouTube 集數的時間戳可點，開影片跳到該處。
+    const youtube = youtubeTimeUrl(ep, seg.start);
+    const time = youtube
+      ? `<a class="seg-time" href="${youtube}" target="_blank" rel="noopener noreferrer">${formatTime(seg.start)}</a>`
+      : `<span class="seg-time">${formatTime(seg.start)}</span>`;
     div.innerHTML = `
       <div class="seg-head">
         <span class="seg-speaker">${name}</span>
-        <span class="seg-time">${formatTime(seg.start)}</span>
+        ${time}
       </div>
       <p>${seg.text}</p>
     `;
@@ -914,6 +949,7 @@ async function loadDetail(guid) {
   document.querySelector("#ep-title").textContent = ep.title;
   document.querySelector("#ep-meta").textContent =
     `${ep.podcast_name}${ep.published_at ? " · " + ep.published_at.slice(0, 10) : ""}${ep.duration_sec ? " · " + formatDuration(ep.duration_sec) : ""}`;
+  renderSourceLink(ep);
   document.querySelector("#summary-text").textContent = ep.summary || "（尚無摘要）";
   document.querySelector("#hashtags").innerHTML =
     (ep.hashtags || []).map(t => `<a href="#/?tag=${encodeURIComponent(t)}"><span><svg class="icon icon-xs"><use href="#ic-tag"/></svg>${t}</span></a>`).join("");
@@ -923,7 +959,7 @@ async function loadDetail(guid) {
   currentMindmapCode = ep.mindmap_mermaid || null;
   await renderMindmap();
 
-  renderTranscript(ep.transcript || [], ep.speakers || {});
+  renderTranscript(ep);
 
   document.querySelectorAll(".subtab").forEach(t => t.classList.toggle("active", t.dataset.sub === "summary"));
   document.querySelectorAll(".subpanel").forEach(p => p.classList.toggle("active", p.id === "sub-summary"));

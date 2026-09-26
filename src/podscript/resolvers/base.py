@@ -7,7 +7,10 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, asdict
 from datetime import datetime
+from pathlib import Path
 from typing import Any
+
+from ..audio import fetch_http
 
 
 @dataclass
@@ -21,6 +24,8 @@ class Episode:
         podcast_name: 節目名稱。
         title: 單集標題。
         mp3_url: 音檔直連網址。可能帶時效性參數，不保證長期有效。
+            沒有固定直連的平台（如 YouTube）為空字串，由 resolver 的
+            download 自行取得。
         duration_sec: 音檔長度（秒）。RSS 未提供時為 None。
         published_at: 發布時間。RSS 未提供時為 None。
         description: 節目簡介原文，含 HTML 標記與贊助商段落。
@@ -63,3 +68,13 @@ class PlatformResolver(ABC):
         Raises:
             ResolveError: 網址格式錯誤、查無節目，或 RSS 中找不到對應單集。
         """
+
+    def download(self, episode: Episode, target: Path) -> None:
+        """把音檔以 mp3 格式寫到 target。
+
+        預設以 HTTP 直接下載 mp3_url；沒有音檔直連的平台覆寫此方法。
+
+        Raises:
+            AudioError: 下載失敗。
+        """
+        fetch_http(episode.mp3_url, target)

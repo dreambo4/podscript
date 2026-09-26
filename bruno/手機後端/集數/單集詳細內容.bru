@@ -10,6 +10,12 @@ get {
   auth: bearer
 }
 
+docs {
+  platform：來源平台（apple／youtube）。
+  source_url：原始網址，前端僅在 https 開頭時顯示為連結；
+  YouTube 集數另以此網址加上 t=<秒>s 做逐字稿時間戳跳轉。
+}
+
 auth:bearer {
   token: {{token}}
 }

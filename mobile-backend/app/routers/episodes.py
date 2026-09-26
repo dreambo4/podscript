@@ -20,7 +20,7 @@ LIST_COLUMNS = """
 DETAIL_COLUMNS = """
     e.id, e.episode_guid, e.podcast_name, e.title, e.published_at, e.duration_sec,
     e.summary, e.mindmap_mermaid, e.hashtags, e.transcript, e.speakers, e.provenance,
-    (f.episode_id is not null) as is_favorite
+    (f.episode_id is not null) as is_favorite, e.platform, e.source_url
 """
 
 FAVORITE_JOIN = "left join favorites f on f.episode_id = e.id and f.user_id = %s"
@@ -148,6 +148,8 @@ def get_episode(guid: str, user: dict = Depends(get_current_user)) -> dict:
         "speakers": row[10] or {},
         "provenance": row[11] or {},
         "is_favorite": row[12],
+        "platform": row[13],
+        "source_url": row[14],
     }
 
 

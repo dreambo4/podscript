@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import Callable
 
 from . import audio, diarize, postprocess, summary, transcribe
+from . import resolvers
 from .resolvers import Episode, resolve
 
 STAGES = ("download", "transcribe", "diarize", "merge", "summarize")
@@ -90,7 +91,9 @@ def process(
 
     notify("download", f"下載音檔：{episode.title}", None)
     mp3 = audio.download_mp3(
-        episode.mp3_url, episode.episode_guid, force="download" in forced
+        episode.episode_guid,
+        lambda target: resolvers.download(episode, target),
+        force="download" in forced,
     )
     wav = audio.to_wav(mp3, force="download" in forced)
 

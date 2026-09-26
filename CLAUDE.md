@@ -47,7 +47,9 @@ Podcast 逐字稿工具：貼 Apple Podcast 網址 → 分人逐字稿 + 摘要 
   依記憶體選定後寫入 `.env` 的 `WHISPER_MODEL`，只下載該模型；執行時不再判斷
 - 選模型邏輯在 `src/podscript/hardware.py`；新增模型時須實測記憶體峰值填入 `MODEL_PEAK_GB`
 - whisper 模型整份載入記憶體且無法換出，選錯會吃光記憶體讓整台機器卡死
-venv 獨立於 `~/Project/podscript/venv`，**不要動** `~/Project/markitdown/venv`。
+venv 一律建在**專案根目錄的 `./venv`**（`run.sh` 與 README 都用這個相對路徑），
+不寫死絕對路徑，因為專案在各台電腦的位置不同。
+只動本專案的 venv，**不要動其他專案的 venv**（如 markitdown）。
 安裝清單見 spec §10，使用者已同意（約 6GB）。
 
 ## Supabase 分工約定（重要）

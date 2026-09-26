@@ -1,6 +1,6 @@
 # podscript
 
-Podcast 逐字稿工具：貼上 Apple Podcast 單集網址，產生**區分說話者、帶時間戳的逐字稿**、
+Podcast 逐字稿工具：貼上 Apple Podcast 單集或 YouTube 影片網址，產生**區分說話者、帶時間戳的逐字稿**、
 內容摘要與心智圖。本機網頁檢視與下載，結果可手動上傳 Supabase，供手機搜尋瀏覽。
 
 ## 架構
@@ -41,8 +41,11 @@ venv 建在專案根目錄的 `venv/`：
 ```bash
 python3.12 -m venv venv
 ./venv/bin/pip install pyannote.audio fastapi uvicorn python-dotenv requests \
-  opencc-python-reimplemented "psycopg[binary]"
+  opencc-python-reimplemented "psycopg[binary]" "yt-dlp[default]"
 ```
+
+YouTube 下載另需 JavaScript 執行環境（node 或 deno 擇一，本機有就好）。
+YouTube 改版常讓舊版 yt-dlp 失效，下載失敗時先執行 `./venv/bin/pip install -U "yt-dlp[default]"`。
 
 ### 3. 環境變數
 
@@ -102,7 +105,8 @@ whisper 模型轉錄時整份載入記憶體，且 Metal 緩衝區無法換出�
 
 開啟 <http://127.0.0.1:8420>，貼上 Apple Podcast **單集**網址
 （形如 `https://podcasts.apple.com/tw/podcast/.../id1856553936?i=1000787805573`，
-需含 `?i=` 單集 id）。
+需含 `?i=` 單集 id），或 YouTube 影片網址（`youtu.be/...`、`youtube.com/watch?v=...` 等皆可，
+只下載音軌，不下載影像）。
 
 - 一集約 1 小時的節目，處理時間約數十分鐘；網頁會顯示各階段進度，重新整理後可接回。
 - 各階段的產出存於 `audio/<guid>/`，以「檔案是否存在」判斷是否已完成，
@@ -131,7 +135,7 @@ whisper 模型轉錄時整份載入記憶體，且 Metal 緩衝區無法換出�
 
 ```
 src/podscript/      本機服務（FastAPI）與處理流程
-  resolvers/        平台網址解析（目前僅 Apple Podcast）
+  resolvers/        平台網址解析（Apple Podcast、YouTube）
   pipeline.py       串接各階段
   transcribe.py     whisper.cpp 轉錄
   diarize.py        pyannote 說話者分離與對齊

@@ -40,19 +40,19 @@ def episode_dir(episode_guid: str) -> Path:
 
 
 def download_mp3(
-    mp3_url: str,
     episode_guid: str,
+    fetch: Callable[[Path], None],
     *,
     force: bool = False,
-    on_progress: ProgressFn | None = None,
 ) -> Path:
-    """下載 mp3。已存在且未指定 force 時直接沿用。
+    """取得 source.mp3。已存在且未指定 force 時直接沿用。
 
     Args:
-        on_progress: 收到 (已下載位元組, 總位元組或 None) 的回呼。
+        fetch: 把 mp3 寫到指定路徑的函式，由各平台 resolver 提供
+            （見 PlatformResolver.download），此處只負責快取與暫存檔。
 
     Raises:
-        AudioError: HTTP 失敗，或下載內容為空。
+        AudioError: 下載失敗，或下載內容為空。
     """
     target = episode_dir(episode_guid) / "source.mp3"
     if target.exists() and not force:
@@ -61,28 +61,45 @@ def download_mp3(
     # 寫入暫存檔，完成後才更名，避免中斷留下不完整的檔案被當成快取。
     partial = target.with_suffix(".mp3.part")
     try:
-        with requests.get(mp3_url, stream=True, timeout=60) as resp:
+        fetch(partial)
+    except AudioError:
+        partial.unlink(missing_ok=True)
+        raise
+
+    if not partial.exists() or partial.stat().st_size == 0:
+        partial.unlink(missing_ok=True)
+        raise AudioError("下載到空檔案；音檔網址可能已失效")
+
+    partial.replace(target)
+    return target
+
+
+def fetch_http(
+    url: str, target: Path, *, on_progress: ProgressFn | None = None
+) -> None:
+    """以 HTTP 串流下載到 target。
+
+    Args:
+        on_progress: 收到 (已下載位元組, 總位元組或 None) 的回呼。
+
+    Raises:
+        AudioError: HTTP 失敗。
+    """
+    try:
+        with requests.get(url, stream=True, timeout=60) as resp:
             resp.raise_for_status()
             total = resp.headers.get("Content-Length")
             total_bytes = int(total) if total and total.isdigit() else None
 
             downloaded = 0
-            with partial.open("wb") as fh:
+            with target.open("wb") as fh:
                 for chunk in resp.iter_content(CHUNK_SIZE):
                     fh.write(chunk)
                     downloaded += len(chunk)
                     if on_progress:
                         on_progress(downloaded, total_bytes)
     except requests.RequestException as exc:
-        partial.unlink(missing_ok=True)
         raise AudioError(f"下載音檔失敗：{exc}") from exc
-
-    if partial.stat().st_size == 0:
-        partial.unlink()
-        raise AudioError("下載到空檔案；mp3 網址可能已失效")
-
-    partial.replace(target)
-    return target
 
 
 def to_wav(

@@ -842,6 +842,18 @@ body.scroll-locked { overflow: hidden; }
 
 .seg-speaker { color: var(--accent); font-weight: 600; }
 .seg-time { font-variant-numeric: tabular-nums; }
+a.seg-time { color: var(--accent); text-decoration: underline; text-underline-offset: 2px; }
+
+.source-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 4px;
+  font-size: 13px;
+  color: var(--accent);
+  text-decoration: none;
+}
+.source-link[hidden] { display: none; }
 .seg p { margin: 0; }
 .seg.low p { color: var(--muted); }
 .seg.low .seg-head::after { content: "⚠ 低信心"; color: var(--warn); }

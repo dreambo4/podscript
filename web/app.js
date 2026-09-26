@@ -305,9 +305,14 @@ function renderTranscript(data) {
     .map((s) => {
       const name = data.speakers[s.speaker] || s.speaker;
       const low = s.confidence < 0.6 ? " low" : "";
+      // YouTube 集數的時間戳直接開影片跳到該處；其他平台維持回聽本機音檔。
+      const youtube = youtubeTimeUrl(data.episode, s.start);
+      const time = youtube
+        ? `<a class="seg-time" href="${escapeHtml(youtube)}" target="_blank" rel="noopener noreferrer" title="在 YouTube 從這裡播放">${formatTime(s.start)}</a>`
+        : `<span class="seg-time" data-at="${s.start}">${formatTime(s.start)}</span>`;
       return `<div class="seg${low}">
         <div class="seg-head">
-          <span class="seg-time" data-at="${s.start}">${formatTime(s.start)}</span>
+          ${time}
           <span class="seg-speaker">${escapeHtml(name)}</span>
         </div>
         <p>${escapeHtml(s.text)}</p>
@@ -315,9 +320,38 @@ function renderTranscript(data) {
     })
     .join("");
 
-  $("transcript").querySelectorAll(".seg-time").forEach((el) => {
+  $("transcript").querySelectorAll("span.seg-time").forEach((el) => {
     el.addEventListener("click", () => playAt(Number(el.dataset.at)));
   });
+}
+
+const PLATFORM_LABELS = { apple: "Apple Podcasts", youtube: "YouTube" };
+
+/**
+ * 只接受 https 網址。source_url 會放進 href，
+ * 擋掉 javascript: 等 scheme（Apple 的網址判斷只看是否含網域字串）。
+ */
+function safeSourceUrl(url) {
+  return /^https:\/\//i.test(url || "") ? url : null;
+}
+
+/** YouTube 單集指定秒數的影片連結；非 YouTube 回傳 null。 */
+function youtubeTimeUrl(episode, seconds) {
+  if (episode.platform !== "youtube") return null;
+  const source = safeSourceUrl(episode.source_url);
+  if (!source) return null;
+  const url = new URL(source);
+  url.searchParams.set("t", `${Math.floor(seconds)}s`);
+  return url.href;
+}
+
+function renderSourceLink(episode) {
+  const link = $("ep-source");
+  const url = safeSourceUrl(episode.source_url);
+  link.hidden = !url;
+  if (!url) return;
+  link.href = url;
+  link.textContent = `在 ${PLATFORM_LABELS[episode.platform] || "原平台"} 開啟 ↗`;
 }
 
 /** 點時間戳回聽原音，用於確認低信心段落。 */
@@ -416,6 +450,7 @@ function renderUploadState() {
     current.has_audio === false ? "音檔已刪除" : "",
   ].filter(Boolean);
   $("ep-meta").textContent = meta.join(" · ");
+  renderSourceLink(current.episode);
 
   $("btn-upload").textContent = uploaded ? "再次上傳" : "上傳";
   const pending = pendingMerges(current.summary).length > 0;

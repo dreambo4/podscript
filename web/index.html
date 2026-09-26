@@ -24,7 +24,7 @@
     </a>
   </h1>
   <form id="start-form" class="start">
-    <input id="url" type="url" placeholder="貼上 Apple Podcast 單集網址…" required>
+    <input id="url" type="url" placeholder="貼上 Apple Podcast 單集或 YouTube 影片網址…" required>
     <button type="submit">開始</button>
   </form>
 </header>
@@ -47,7 +47,7 @@
   <main id="content">
 
     <section id="empty" class="card placeholder">
-      <p>貼上 Apple Podcast 單集網址開始，<br>或從左側選擇已處理的單集。</p>
+      <p>貼上 Apple Podcast 單集或 YouTube 影片網址開始，<br>或從左側選擇已處理的單集。</p>
     </section>
 
     <section id="progress" class="card" hidden>
@@ -67,6 +67,7 @@
         <div>
           <h2 id="ep-title"></h2>
           <p class="muted" id="ep-meta"></p>
+          <a id="ep-source" class="source-link" target="_blank" rel="noopener noreferrer" hidden></a>
         </div>
         <div class="actions">
           <button id="btn-download" type="button">下載</button>
