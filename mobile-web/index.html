@@ -36,7 +36,7 @@
 <meta name="twitter:description" content="Podcast 逐字稿工具：分角色逐字稿、摘要、心智圖">
 <meta name="twitter:image" content="icons/og-image.png">
 
-<link rel="stylesheet" href="style.css?v=48e2bd57508a">
+<link rel="stylesheet" href="style.css?v=b64de5c2ee8d">
 <script src="config.js"></script>
 </head>
 <body>
@@ -75,6 +75,12 @@
     </symbol>
     <symbol id="ic-close" viewBox="0 0 24 24">
       <path d="M6 6l12 12M18 6 6 18" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+    </symbol>
+    <symbol id="ic-expand" viewBox="0 0 24 24">
+      <path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+    </symbol>
+    <symbol id="ic-reset" viewBox="0 0 24 24">
+      <path d="M4 12a8 8 0 1 0 2.4-5.7M4 4v4h4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
     </symbol>
     <symbol id="ic-sun" viewBox="0 0 24 24">
       <circle cx="12" cy="12" r="4.2" fill="none" stroke="currentColor" stroke-width="1.6"/>
@@ -247,7 +253,13 @@
       <div class="block">
         <p id="summary-text"></p>
         <p id="hashtags" class="tags"></p>
-        <div id="mindmap"></div>
+        <div class="mindmap-wrap" id="mindmap-wrap" hidden>
+          <div id="mindmap"></div>
+          <button id="btn-mindmap-full" class="mindmap-full-btn" type="button">
+            <svg class="icon icon-sm"><use href="#ic-expand"/></svg>全螢幕
+          </button>
+        </div>
+        <p id="mindmap-empty" class="muted mindmap-empty" hidden></p>
       </div>
     </div>
 
@@ -293,12 +305,32 @@
   </div>
 </div>
 
+<!-- 心智圖全螢幕：頁面內只放唯讀縮圖（不攔手勢，手機滑過去照常捲頁面），
+     要拖曳縮放時才進這裡操作。 -->
+<div id="mindmap-overlay" class="mindmap-overlay" hidden role="dialog" aria-modal="true" aria-label="心智圖">
+  <div class="mindmap-overlay-bar">
+    <span class="mindmap-overlay-title">心智圖</span>
+    <button id="btn-mindmap-reset" type="button">
+      <svg class="icon icon-sm"><use href="#ic-reset"/></svg>重置
+    </button>
+    <button id="btn-mindmap-close" type="button">
+      <svg class="icon icon-sm"><use href="#ic-close"/></svg>關閉
+    </button>
+  </div>
+  <div class="mindmap-stage">
+    <div id="mindmap-full"></div>
+    <span class="mindmap-stage-hint">單指拖曳 · 雙指縮放 · 橫放看得更完整</span>
+  </div>
+</div>
+
 <script type="module">
   // 心智圖改用 markmap 渲染（資料仍存 mermaid 語法，前端轉譯）。
   import { renderMindmap } from "./mindmap-render.js";
   window.renderMarkmap = renderMindmap;
+  // markmap 從 CDN 載入，可能晚於詳情頁資料到達；通知 app.js 補畫。
+  window.dispatchEvent(new Event("markmap-ready"));
 </script>
-<script src="app.js?v=0ded70f2c1e9"></script>
+<script src="app.js?v=7e0243900b06"></script>
 <script src="https://accounts.google.com/gsi/client" async defer onload="initGoogleSignIn()"></script>
 </body>
 </html>

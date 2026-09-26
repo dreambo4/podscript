@@ -842,20 +842,70 @@ function setDetailFavoriteIcon(isFavorite) {
 let currentDetailGuid = null;
 let currentMindmapCode = null;
 
-function renderMindmap() {
-  const mindmapEl = document.querySelector("#mindmap");
-  if (!currentMindmapCode) {
-    mindmapEl.textContent = "（尚無心智圖）";
-    return;
-  }
-  if (typeof window.renderMarkmap !== "function") {
-    mindmapEl.textContent = "（心智圖元件尚未載入）";
-    return;
-  }
-  // 深色模式下 root 用較亮的灰，避免在深底糊掉；分支色為 HSL 高明度、深底仍清晰。
-  const rootColor = isDarkMode() ? "#cbd5e1" : "#475569";
-  window.renderMarkmap(currentMindmapCode, mindmapEl, { rootColor });
+// 深色模式下 root 用較亮的灰，避免在深底糊掉；分支色為 HSL 高明度、深底仍清晰。
+function mindmapRootColor() {
+  return isDarkMode() ? "#cbd5e1" : "#475569";
 }
+
+// 頁面內是唯讀縮圖：不攔手勢，手指滑過去照常捲頁面；要拖曳縮放時點進全螢幕。
+function renderMindmap() {
+  const wrap = document.querySelector("#mindmap-wrap");
+  const empty = document.querySelector("#mindmap-empty");
+  const message = !currentMindmapCode ? "（尚無心智圖）"
+    : typeof window.renderMarkmap !== "function" ? "（心智圖元件尚未載入）" : null;
+  wrap.hidden = message !== null;
+  empty.hidden = message === null;
+  if (message) {
+    empty.textContent = message;
+    return;
+  }
+  window.renderMarkmap(currentMindmapCode, document.querySelector("#mindmap"),
+    { rootColor: mindmapRootColor(), interactive: false });
+  if (fullMindmap) openMindmapFull(); // 全螢幕中切換主題時一併重繪
+}
+
+// ── 心智圖全螢幕 ──────────────────────────────────
+let fullMindmap = null;
+const mindmapOverlay = document.querySelector("#mindmap-overlay");
+
+function openMindmapFull() {
+  if (!currentMindmapCode || typeof window.renderMarkmap !== "function") return;
+  mindmapOverlay.hidden = false;
+  document.body.classList.add("scroll-locked");
+  fullMindmap?.destroy();
+  // 必須在 overlay 顯示後才渲染，markmap 依容器實際尺寸 fit。
+  fullMindmap = window.renderMarkmap(currentMindmapCode, document.querySelector("#mindmap-full"),
+    { rootColor: mindmapRootColor() });
+}
+
+function closeMindmapFull() {
+  if (mindmapOverlay.hidden) return;
+  mindmapOverlay.hidden = true;
+  document.body.classList.remove("scroll-locked");
+  fullMindmap?.destroy();
+  fullMindmap = null;
+}
+
+document.querySelector("#btn-mindmap-full").addEventListener("click", (e) => {
+  e.stopPropagation();
+  openMindmapFull();
+});
+// 點縮圖任一處也進全螢幕；點節點的圓點仍是展開/收合。
+document.querySelector("#mindmap").addEventListener("click", (e) => {
+  if (!e.target.closest("circle")) openMindmapFull();
+});
+document.querySelector("#btn-mindmap-close").addEventListener("click", closeMindmapFull);
+document.querySelector("#btn-mindmap-reset").addEventListener("click", () => fullMindmap?.fit());
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape") closeMindmapFull();
+});
+// 換頁（含返回鍵）時關掉，避免全螢幕蓋在別的頁面上。
+window.addEventListener("hashchange", closeMindmapFull);
+window.addEventListener("markmap-ready", () => {
+  if (currentMindmapCode) renderMindmap();
+});
+// 轉橫/轉直後依新尺寸重新置中。
+window.addEventListener("resize", () => fullMindmap?.fit());
 
 async function loadDetail(guid) {
   currentDetailGuid = guid;
