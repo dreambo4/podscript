@@ -10,7 +10,8 @@ Podcast 逐字稿工具：貼 Apple Podcast 網址 → 分人逐字稿 + 摘要 
 
 ## 關鍵技術陷阱（務必處理）
 1. **不要用 Docker** → 容器在 macOS 取不到 Apple Silicon GPU，會失去 Metal 加速
-2. **Whisper 中文會吐簡體** → OpenCC `s2twp` 後處理為必做步驟
+2. **Whisper 中文會吐簡體** → OpenCC `s2tw` 後處理為必做步驟
+   （勿改 `s2twp`：其片語表會破壞術語，如實價登錄→實價登入）
 3. **Whisper 會幻覺**（「請訂閱」等字幕語）→ 需設 `condition_on_previous_text=False`
 4. **Postgres `to_tsvector` 對中文無效** → 中文搜尋須用 `pg_trgm`，否則手機搜尋等於不能用
 5. **逐字稿不可當命令列參數傳給 `claude -p`** → 2-3 萬字會爆 ARG_MAX，必須寫檔讓它讀
