@@ -90,7 +90,12 @@
         <div class="block-head">
           <h3>心智圖</h3>
         </div>
-        <div id="mindmap"></div>
+        <div class="mindmap-wrap">
+          <div id="mindmap"></div>
+          <button id="btn-mindmap-full" class="mindmap-full-btn" type="button">
+            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg>放大檢視
+          </button>
+        </div>
       </div>
 
       <div class="block">
@@ -120,6 +125,24 @@
     </menu>
   </form>
 </dialog>
+
+<!-- 心智圖全螢幕：頁面內只放唯讀縮圖（不攔滾輪，捲頁面不會誤縮放），
+     要拖曳縮放時才進這裡操作。 -->
+<div id="mindmap-overlay" class="mindmap-overlay" hidden role="dialog" aria-modal="true" aria-label="心智圖">
+  <div class="mindmap-overlay-bar">
+    <span class="mindmap-overlay-title">心智圖</span>
+    <button id="btn-mindmap-reset" type="button">
+      <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12a8 8 0 1 0 2.4-5.7M4 4v4h4"/></svg>重置
+    </button>
+    <button id="btn-mindmap-close" type="button">
+      <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>關閉
+    </button>
+  </div>
+  <div class="mindmap-stage">
+    <div id="mindmap-full"></div>
+    <span class="mindmap-stage-hint">拖曳平移 · 滾輪縮放 · Esc 關閉</span>
+  </div>
+</div>
 
 <script type="module">
   // 心智圖改用 markmap 渲染（資料仍存 mermaid 語法，前端轉譯）。

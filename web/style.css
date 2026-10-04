@@ -263,19 +263,81 @@ button:disabled { opacity: .5; cursor: default; }
 
 /* 心智圖用 markmap 渲染：SVG 自適應內容大小，容器給固定高度供其展開/縮放。
    節點色、線粗由 mindmap-render.js 以 JS 指定，CSS 只管版面與字級。 */
-#mindmap {
+/* 頁面內是唯讀縮圖（不攔滾輪），右上角按鈕或點圖進全螢幕操作。 */
+.mindmap-wrap {
+  position: relative;
   max-width: 100%;
   height: 520px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  overflow: hidden;
 }
 
-#mindmap svg {
+#mindmap { height: 100%; cursor: zoom-in; }
+
+#mindmap svg, #mindmap-full svg {
   display: block;
   width: 100%;
   height: 100%;
 }
 
 /* markmap 節點文字放大；.markmap-foreign 是文字容器 */
-#mindmap .markmap-foreign { font-size: 18px; }
+#mindmap .markmap-foreign, #mindmap-full .markmap-foreign { font-size: 18px; }
+
+.mindmap-full-btn, .mindmap-overlay-bar button {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  font-size: 13px;
+}
+.mindmap-full-btn { position: absolute; top: 10px; right: 10px; }
+.mindmap-wrap .icon, .mindmap-overlay .icon {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* 全螢幕：蓋住整頁，body 鎖捲動避免背後頁面跟著動。 */
+body.scroll-locked { overflow: hidden; }
+.mindmap-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
+}
+.mindmap-overlay[hidden] { display: none; }
+.mindmap-overlay-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  background: var(--card);
+  border-bottom: 1px solid var(--line);
+}
+.mindmap-overlay-title { flex: 1; min-width: 0; font-weight: 700; font-size: 15px; }
+.mindmap-stage { position: relative; flex: 1; min-height: 0; }
+#mindmap-full { height: 100%; }
+.mindmap-stage-hint {
+  position: absolute;
+  left: 50%;
+  bottom: 14px;
+  transform: translateX(-50%);
+  padding: 4px 12px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--card);
+  color: var(--muted);
+  font-size: 12px;
+  white-space: nowrap;
+  pointer-events: none;
+}
 
 .tags { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0 0; padding: 0; }
 
@@ -530,7 +592,9 @@ dialog menu { display: flex; gap: 8px; justify-content: flex-end; margin: 20px 0
 }
 
 @media print {
-  .topbar, .sidebar, .actions, .block-head button, .speakers, #progress { display: none !important; }
+  .topbar, .sidebar, .actions, .block-head button, .speakers, #progress,
+  .mindmap-full-btn, .mindmap-overlay { display: none !important; }
+  .mindmap-wrap { border: 0; }
   body { background: #fff; }
   .layout { display: block; }
   #content { padding: 0; }

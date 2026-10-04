@@ -268,11 +268,53 @@ function renderMindmap(code) {
   }
   try {
     // window.renderMarkmap 由 index.html 的 module 腳本注入（markmap 渲染）。
-    window.renderMarkmap(code, box);
+    // 頁面內是唯讀縮圖：不攔滾輪與拖曳，要縮放時點進全螢幕。
+    window.renderMarkmap(code, box, { interactive: false });
   } catch (err) {
     box.innerHTML = `<p class="error">心智圖語法錯誤，請重新生成</p>`;
   }
 }
+
+// ── 心智圖全螢幕 ──────────────────────────────────
+let fullMindmap = null;
+
+function openMindmapFull() {
+  const code = current?.summary?.mindmap;
+  if (!code || typeof window.renderMarkmap !== "function") return;
+  $("mindmap-overlay").hidden = false;
+  document.body.classList.add("scroll-locked");
+  fullMindmap?.destroy();
+  // 必須在 overlay 顯示後才渲染，markmap 依容器實際尺寸 fit。
+  try {
+    fullMindmap = window.renderMarkmap(code, $("mindmap-full"));
+  } catch (err) {
+    closeMindmapFull();
+  }
+}
+
+function closeMindmapFull() {
+  if ($("mindmap-overlay").hidden) return;
+  $("mindmap-overlay").hidden = true;
+  document.body.classList.remove("scroll-locked");
+  fullMindmap?.destroy();
+  fullMindmap = null;
+  $("mindmap-full").innerHTML = "";
+}
+
+$("btn-mindmap-full").addEventListener("click", (e) => {
+  e.stopPropagation();
+  openMindmapFull();
+});
+// 點縮圖任一處也進全螢幕；點節點的圓點仍是展開/收合。
+$("mindmap").addEventListener("click", (e) => {
+  if (!e.target.closest("circle")) openMindmapFull();
+});
+$("btn-mindmap-close").addEventListener("click", closeMindmapFull);
+$("btn-mindmap-reset").addEventListener("click", () => fullMindmap?.fit());
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape") closeMindmapFull();
+});
+window.addEventListener("resize", () => fullMindmap?.fit());
 
 function renderSpeakers(data) {
   const ids = [...new Set(data.segments.map((s) => s.speaker))].sort();
