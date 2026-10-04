@@ -258,15 +258,24 @@ function cardTagsHtml(hashtags) {
     .join("");
 }
 
+// 搜尋結果的命中片段：逐字稿第一個命中處前後幾句，附命中次數
+function snippetHtml(ep) {
+  if (!ep.snippet) return "";
+  return `<span class="ep-snippet">${highlightHtml(ep.snippet, ep.query, ep.searchOptions)}<span class="ep-match-count">${ep.match_count} 處</span></span>`;
+}
+
 function renderEpisodeCard(ep) {
   const div = document.createElement("div");
   div.className = "ep-card";
+  // 從搜尋結果點進去時帶上關鍵字，詳細頁據此跳到逐字稿命中處
+  const href = `#/ep/${encodeURIComponent(ep.episode_guid)}${ep.query ? `?${searchHashParams(ep.query, ep.searchOptions)}` : ""}`;
   div.innerHTML = `
-    <a href="#/ep/${encodeURIComponent(ep.episode_guid)}" class="ep-link">
+    <a href="${href}" class="ep-link">
       ${renderCoverHtml(ep.podcast_name)}
       <div class="ep-body">
         <span class="ep-title">${ep.title}</span>
         <span class="ep-meta">${ep.podcast_name}${ep.published_at ? " · " + ep.published_at.slice(0, 10) : ""}${ep.duration_sec ? " · " + formatDuration(ep.duration_sec) : ""}</span>
+        ${snippetHtml(ep)}
         <span class="tags">${cardTagsHtml(ep.hashtags)}</span>
       </div>
     </a>
@@ -448,6 +457,8 @@ async function loadList({ quiet = false } = {}) {
   const q = document.querySelector("#search").value.trim();
   const query = new URLSearchParams();
   if (q) query.set("q", q);
+  if (searchOptions.caseSensitive) query.set("case_sensitive", "true");
+  if (searchOptions.wholeWord) query.set("whole_word", "true");
   currentTags.forEach(t => query.append("tags", t));
   query.set("tag_mode", currentTagMode);
   if (currentChannel) query.set("channel", currentChannel);
@@ -466,6 +477,8 @@ async function loadList({ quiet = false } = {}) {
   // 若期間又觸發了更新的請求，這次結果已過時，不渲染避免畫面閃回舊資料
   if (requestId !== listRequestId) return;
 
+  const options = { ...searchOptions };
+  episodes.forEach(ep => { ep.query = q; ep.searchOptions = options; });
   renderFilteredList(episodes);
 }
 
@@ -475,6 +488,38 @@ function setListLoading(loading) {
 }
 
 document.querySelector("#search").addEventListener("input", debounce(() => loadList(), 300));
+
+// ── 搜尋選項：大小寫須相符、全字拼寫須相符（仿 VS Code 搜尋框）──
+const SEARCH_OPTIONS_KEY = "podscript_search_options";
+const searchOptions = { caseSensitive: false, wholeWord: false };
+try {
+  Object.assign(searchOptions, JSON.parse(localStorage.getItem(SEARCH_OPTIONS_KEY)) || {});
+} catch { /* 讀不到就用預設 */ }
+
+/** 詳細頁網址的搜尋參數；只帶有開的選項 */
+function searchHashParams(query, options = {}) {
+  const params = new URLSearchParams({ q: query });
+  if (options.caseSensitive) params.set("case", "1");
+  if (options.wholeWord) params.set("word", "1");
+  return params.toString();
+}
+
+function bindSearchOption(id, key) {
+  const btn = document.querySelector(id);
+  const sync = () => {
+    btn.classList.toggle("on", searchOptions[key]);
+    btn.setAttribute("aria-pressed", String(searchOptions[key]));
+  };
+  sync();
+  btn.addEventListener("click", () => {
+    searchOptions[key] = !searchOptions[key];
+    sync();
+    try { localStorage.setItem(SEARCH_OPTIONS_KEY, JSON.stringify(searchOptions)); } catch { /* 存不了也不影響本次搜尋 */ }
+    if (document.querySelector("#search").value.trim()) loadList();
+  });
+}
+bindSearchOption("#btn-match-case", "caseSensitive");
+bindSearchOption("#btn-whole-word", "wholeWord");
 
 function debounce(fn, ms) {
   let timer;
@@ -492,6 +537,33 @@ function escapeHtml(text) {
     /[&<>"']/g,
     ch => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[ch]
   );
+}
+
+/**
+ * 搜尋比對規則，須與後端 episodes.py 的 _regex_pattern 一致：
+ * 關鍵字只比對字面；全字相符時「字」只算英數與底線，
+ * 且只在關鍵字頭（尾）是英數時才檢查前（後）一字（中文與英文常直接相連）。
+ */
+function searchRegex(query, { caseSensitive = false, wholeWord = false } = {}) {
+  let source = query.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  if (wholeWord) {
+    if (/^\w/.test(query)) source = "(?<![A-Za-z0-9_])" + source;
+    if (/\w$/.test(query)) source += "(?![A-Za-z0-9_])";
+  }
+  return new RegExp(source, caseSensitive ? "g" : "gi");
+}
+
+/** 跳脫 HTML 後以 <mark> 標出所有命中處；先切段再各自跳脫，標記不會被當成內容。 */
+function highlightHtml(text, query, options) {
+  text = String(text ?? "");
+  if (!query) return escapeHtml(text);
+  let html = "";
+  let from = 0;
+  for (const match of text.matchAll(searchRegex(query, options))) {
+    html += escapeHtml(text.slice(from, match.index)) + `<mark>${escapeHtml(match[0])}</mark>`;
+    from = match.index + match[0].length;
+  }
+  return html + escapeHtml(text.slice(from));
 }
 
 // 手機端只把網址存進資料庫，實際下載與轉錄回本機端再跑。
@@ -843,7 +915,7 @@ function renderSourceLink(ep) {
   link.querySelector("span").textContent = `在 ${PLATFORM_LABELS[ep.platform] || "原平台"} 開啟`;
 }
 
-function renderTranscript(ep) {
+function renderTranscript(ep, query = "", options = {}) {
   const container = document.querySelector("#transcript");
   const speakers = ep.speakers || {};
   container.innerHTML = "";
@@ -858,14 +930,52 @@ function renderTranscript(ep) {
       : `<span class="seg-time">${formatTime(seg.start)}</span>`;
     div.innerHTML = `
       <div class="seg-head">
-        <span class="seg-speaker">${name}</span>
+        <span class="seg-speaker">${escapeHtml(name)}</span>
         ${time}
       </div>
-      <p>${seg.text}</p>
+      <p>${highlightHtml(seg.text, query, options)}</p>
     `;
     container.appendChild(div);
   });
 }
+
+// ── 逐字稿命中導覽 ──────────────────────────────────
+// 從搜尋結果進來時標亮所有命中處，底部浮出「第 i／N 處」切換列。
+let detailEp = null;
+let hitMarks = [];
+let hitIndex = 0;
+
+function showHits(ep, query, options) {
+  renderTranscript(ep, query, options);
+  hitMarks = [...document.querySelectorAll("#transcript mark")];
+  const bar = document.querySelector("#hit-nav");
+  bar.hidden = hitMarks.length === 0;
+  if (!hitMarks.length) return false; // 只命中標題：維持一般顯示
+  selectSubtab("transcript");
+  goToHit(0);
+  return true;
+}
+
+function goToHit(index) {
+  hitMarks[hitIndex]?.classList.remove("current");
+  hitIndex = (index + hitMarks.length) % hitMarks.length;
+  const mark = hitMarks[hitIndex];
+  mark.classList.add("current");
+  mark.scrollIntoView({ block: "center", behavior: "smooth" });
+  document.querySelector("#hit-count").textContent = `第 ${hitIndex + 1}／${hitMarks.length} 處`;
+}
+
+function clearHits() {
+  hitMarks = [];
+  document.querySelector("#hit-nav").hidden = true;
+  if (detailEp) renderTranscript(detailEp);
+  // 網址拿掉關鍵字，重新整理才不會又標亮；replaceState 不觸發 hashchange
+  history.replaceState(null, "", `#/ep/${encodeURIComponent(currentDetailGuid)}`);
+}
+
+document.querySelector("#btn-hit-prev").addEventListener("click", () => goToHit(hitIndex - 1));
+document.querySelector("#btn-hit-next").addEventListener("click", () => goToHit(hitIndex + 1));
+document.querySelector("#btn-hit-close").addEventListener("click", clearHits);
 
 function setDetailFavoriteIcon(isFavorite) {
   const btn = document.querySelector("#btn-favorite-detail");
@@ -942,9 +1052,10 @@ window.addEventListener("markmap-ready", () => {
 // 轉橫/轉直後依新尺寸重新置中。
 window.addEventListener("resize", () => fullMindmap?.fit());
 
-async function loadDetail(guid) {
+async function loadDetail(guid, query = "", options = {}) {
   currentDetailGuid = guid;
   const ep = await api(`/episodes/${encodeURIComponent(guid)}`);
+  detailEp = ep;
 
   document.querySelector("#ep-title").textContent = ep.title;
   document.querySelector("#ep-meta").textContent =
@@ -959,10 +1070,13 @@ async function loadDetail(guid) {
   currentMindmapCode = ep.mindmap_mermaid || null;
   await renderMindmap();
 
-  renderTranscript(ep);
+  selectSubtab("summary");
+  if (!showHits(ep, query, options)) renderTranscript(ep);
+}
 
-  document.querySelectorAll(".subtab").forEach(t => t.classList.toggle("active", t.dataset.sub === "summary"));
-  document.querySelectorAll(".subpanel").forEach(p => p.classList.toggle("active", p.id === "sub-summary"));
+function selectSubtab(name) {
+  document.querySelectorAll(".subtab").forEach(t => t.classList.toggle("active", t.dataset.sub === name));
+  document.querySelectorAll(".subpanel").forEach(p => p.classList.toggle("active", p.id === `sub-${name}`));
 }
 
 document.querySelector("#btn-favorite-detail").addEventListener("click", async (e) => {
@@ -978,10 +1092,7 @@ document.querySelector("#btn-favorite-detail").addEventListener("click", async (
 });
 
 document.querySelectorAll(".subtab").forEach(tab => {
-  tab.addEventListener("click", () => {
-    document.querySelectorAll(".subtab").forEach(t => t.classList.toggle("active", t === tab));
-    document.querySelectorAll(".subpanel").forEach(p => p.classList.toggle("active", p.id === `sub-${tab.dataset.sub}`));
-  });
+  tab.addEventListener("click", () => selectSubtab(tab.dataset.sub));
 });
 
 // ── 路由 ──────────────────────────────────────────
@@ -999,7 +1110,10 @@ async function route() {
   try {
     if (epMatch) {
       showDetail();
-      await loadDetail(decodeURIComponent(epMatch[1]));
+      await loadDetail(decodeURIComponent(epMatch[1]), params.get("q") || "", {
+        caseSensitive: params.get("case") === "1",
+        wholeWord: params.get("word") === "1",
+      });
     } else if (path === "#/favorites") {
       showFavorites();
       await loadFavorites();

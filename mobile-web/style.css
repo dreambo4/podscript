@@ -165,13 +165,31 @@ body {
 
 #search {
   width: 100%;
-  padding: 10px 12px 10px 36px;
+  padding: 10px 76px 10px 36px;
   border: 1px solid var(--line);
   border-radius: 12px;
   font: inherit;
   background: var(--card);
   color: var(--ink);
 }
+
+/* 搜尋框右側的比對選項開關 */
+.search-options { position: absolute; right: 6px; display: flex; gap: 2px; }
+.search-opt {
+  width: 32px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: none;
+  color: var(--muted);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.search-opt.on { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
+.whole-word-mark { text-decoration: underline; text-underline-offset: 3px; }
 
 .filter-btn {
   flex: none;
@@ -441,6 +459,9 @@ body {
 .ep-body { flex: 1; min-width: 0; }
 .ep-title { display: block; font-weight: 700; font-size: 14px; line-height: 1.5; margin-bottom: 4px; padding-right: 26px; }
 .ep-meta { display: block; font-size: 12px; color: var(--muted); margin-bottom: 6px; }
+.ep-snippet { display: block; font-size: 12px; line-height: 1.6; color: var(--ink); margin-bottom: 6px; }
+.ep-snippet mark { background: var(--accent-soft); color: var(--accent); font-weight: 700; border-radius: 3px; padding: 0 1px; }
+.ep-match-count { margin-left: 6px; color: var(--muted); white-space: nowrap; }
 
 .heart-btn {
   position: absolute;
@@ -856,6 +877,42 @@ a.seg-time { color: var(--accent); text-decoration: underline; text-underline-of
 }
 .source-link[hidden] { display: none; }
 .seg p { margin: 0; }
+.seg mark { background: var(--accent-soft); color: inherit; border-radius: 3px; padding: 0 1px; }
+.seg mark.current { background: var(--accent); color: var(--accent-ink); }
+
+/* 逐字稿命中導覽列：浮在底部中央 */
+.hit-nav {
+  position: fixed;
+  left: 50%;
+  bottom: calc(16px + env(safe-area-inset-bottom));
+  transform: translateX(-50%);
+  z-index: 8;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 6px 6px 14px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--card);
+  box-shadow: var(--shadow-soft), 0 4px 16px rgba(0, 0, 0, .12);
+  font-size: 13px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.hit-nav span { margin-right: 4px; font-variant-numeric: tabular-nums; }
+.hit-nav button {
+  display: flex;
+  padding: 6px;
+  border: none;
+  border-radius: 999px;
+  background: none;
+  color: var(--ink);
+  cursor: pointer;
+}
+.hit-nav button:active { background: var(--accent-soft); }
+.flip-y { transform: scaleY(-1); }
+/* 底部浮列不擋到最後一段 */
+#sub-transcript .block { padding-bottom: 72px; }
 .seg.low p { color: var(--muted); }
 .seg.low .seg-head::after { content: "⚠ 低信心"; color: var(--warn); }
 

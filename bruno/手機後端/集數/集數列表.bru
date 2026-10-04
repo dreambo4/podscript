@@ -16,6 +16,8 @@ params:query {
   sort: created_at
   tag_mode: all
   ~q: 
+  ~case_sensitive: true
+  ~whole_word: true
   ~tags: 
   ~tag: 
   ~channel: 
@@ -26,6 +28,13 @@ docs {
   sort：created_at／published_at
   tag_mode：all（須同時包含全部標籤）／any（符合任一）
   tags 可重複多次，例如 tags=AI&tags=投資
+  有 q 時每集多回傳：
+    snippet：逐字稿第一個命中處前後各約 40 字，被截斷的一側加「…」；只命中標題時為 null
+    match_count：逐字稿內命中次數（不分大小寫）
+  沒有 q 時 snippet 一律為 null、match_count 為 0
+  case_sensitive=true：大小寫須相符
+  whole_word=true：全字拼寫須相符；「字」只算英數與底線，且只在關鍵字頭（尾）是英數時才檢查前（後）一字，
+    所以「AI」不會命中「said」，但會命中「我的AI我」；中文關鍵字開不開結果相同
 }
 
 script:post-response {

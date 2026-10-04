@@ -36,7 +36,7 @@
 <meta name="twitter:description" content="Podcast 逐字稿工具：分角色逐字稿、摘要、心智圖">
 <meta name="twitter:image" content="icons/og-image.png">
 
-<link rel="stylesheet" href="style.css?v=8d18bb377bcf">
+<link rel="stylesheet" href="style.css?v=f07c67d1f5e9">
 <script src="config.js"></script>
 </head>
 <body>
@@ -160,6 +160,10 @@
       <div class="search-wrap">
         <svg class="icon icon-sm search-icon"><use href="#ic-search"/></svg>
         <input id="search" type="search" placeholder="搜尋標題或內文…">
+        <div class="search-options">
+          <button id="btn-match-case" class="search-opt" type="button" aria-pressed="false" title="大小寫須相符" aria-label="大小寫須相符">Aa</button>
+          <button id="btn-whole-word" class="search-opt" type="button" aria-pressed="false" title="全字拼寫須相符" aria-label="全字拼寫須相符"><span class="whole-word-mark">ab</span></button>
+        </div>
       </div>
       <button id="btn-open-filter" class="filter-btn" type="button" aria-label="篩選與排序">
         <svg class="icon"><use href="#ic-filter"/></svg>
@@ -273,6 +277,19 @@
       <div class="block">
         <div id="transcript"></div>
       </div>
+      <!-- 從搜尋結果進來時才顯示；放在逐字稿分頁內，切到摘要分頁時跟著隱藏 -->
+      <div id="hit-nav" class="hit-nav" hidden>
+        <span id="hit-count"></span>
+        <button id="btn-hit-prev" type="button" aria-label="上一處">
+          <svg class="icon icon-sm"><use href="#ic-chevron-up"/></svg>
+        </button>
+        <button id="btn-hit-next" type="button" aria-label="下一處">
+          <svg class="icon icon-sm flip-y"><use href="#ic-chevron-up"/></svg>
+        </button>
+        <button id="btn-hit-close" type="button" aria-label="取消標亮">
+          <svg class="icon icon-sm"><use href="#ic-close"/></svg>
+        </button>
+      </div>
     </div>
   </section>
 
@@ -336,7 +353,7 @@
   // markmap 從 CDN 載入，可能晚於詳情頁資料到達；通知 app.js 補畫。
   window.dispatchEvent(new Event("markmap-ready"));
 </script>
-<script src="app.js?v=56d5a32a65f4"></script>
+<script src="app.js?v=3607a62f38ab"></script>
 <script src="https://accounts.google.com/gsi/client" async defer onload="initGoogleSignIn()"></script>
 </body>
 </html>
