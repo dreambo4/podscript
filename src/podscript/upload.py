@@ -418,6 +418,33 @@ def fetch_existing_hashtags() -> list[str]:
     return sorted({row[0] for row in rows if row[0]})
 
 
+def fetch_speakers_by_podcast(podcast_name: str) -> dict[str, dict[str, str]]:
+    """取得同一節目各集的說話者名稱，供改名時列出建議人名。
+
+    查詢失敗或未設定 DATABASE_URL 時回傳空 dict，不可讓建議清單擋住單集載入。
+
+    Returns:
+        {guid: {SPEAKER_xx: 名稱}}。
+    """
+    url = os.environ.get("DATABASE_URL")
+    if not url or not podcast_name:
+        return {}
+
+    try:
+        with psycopg.connect(url, connect_timeout=CONNECT_TIMEOUT) as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "select episode_guid, speakers from episodes"
+                    " where podcast_name = %s",
+                    (podcast_name,),
+                )
+                rows = cur.fetchall()
+    except psycopg.Error:
+        return {}
+
+    return {guid: _as_json(speakers, {}) for guid, speakers in rows}
+
+
 # ── 待處理佇列 ────────────────────────────────────────
 # 手機端只把網址存進 queue 表，下載與轉錄一律在本機端執行。
 

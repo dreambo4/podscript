@@ -9,3 +9,9 @@ get {
   body: none
   auth: none
 }
+
+docs {
+  回應的 known_speakers 為同一節目（以 podcast_name 判斷，YouTube 為頻道名）以前用過的說話者名稱，
+  供改名輸入框的下拉清單使用。來源為資料庫加上本機尚未上傳的集數，依使用集數由多到少排序，
+  不含 SPEAKER_00 這類預設編號。未設定 DATABASE_URL 或查詢失敗時只含本機結果。
+}

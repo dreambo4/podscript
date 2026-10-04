@@ -7,8 +7,10 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import threading
 import traceback
+from collections import Counter
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
@@ -369,7 +371,36 @@ def get_episode(guid: str) -> dict:
         "uploaded_at": upload.uploaded_at(guid),
         "has_audio": (directory / "source.mp3").exists(),
         "from_db": from_db,
+        "known_speakers": _known_speakers(result.episode.podcast_name),
     }
+
+
+DEFAULT_SPEAKER = re.compile(r"SPEAKER_\d+")
+
+
+def _known_speakers(podcast_name: str) -> list[str]:
+    """列出同一節目以前用過的說話者名稱，依使用集數由多到少排序。
+
+    來源為資料庫加上本機尚未上傳的集數；同一集兩邊都有時以本機為準。
+    以 podcast_name 判斷是否同一節目（YouTube 為頻道名）。
+    """
+    if not podcast_name:
+        return []
+
+    by_guid = upload.fetch_speakers_by_podcast(podcast_name)
+    for directory in audio.AUDIO_ROOT.glob("*"):
+        if not directory.is_dir():
+            continue
+        result = pipeline.load_result(directory)
+        if result is not None and result.episode.podcast_name == podcast_name:
+            by_guid[directory.name] = result.speakers
+
+    counts: Counter[str] = Counter()
+    for speakers in by_guid.values():
+        names = {v.strip() for v in speakers.values() if isinstance(v, str)}
+        counts.update(n for n in names if n and not DEFAULT_SPEAKER.fullmatch(n))
+    # 次數相同時依名稱排序，讓清單順序穩定。
+    return [name for name, _ in sorted(counts.items(), key=lambda kv: (-kv[1], kv[0]))]
 
 
 @app.put("/api/episodes/{guid}/speakers")

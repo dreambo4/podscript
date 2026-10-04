@@ -318,12 +318,15 @@ window.addEventListener("resize", () => fullMindmap?.fit());
 
 function renderSpeakers(data) {
   const ids = [...new Set(data.segments.map((s) => s.speaker))].sort();
-  $("speaker-controls").innerHTML = ids
-    .map(
-      (id) =>
-        `<input data-speaker="${id}" value="${escapeHtml(data.speakers[id] || "")}" placeholder="${id}">`
-    )
-    .join("");
+  // 輸入框共用同一個 datalist：列出這個節目以前用過的人名，也可自行輸入。
+  $("speaker-controls").innerHTML =
+    ids
+      .map(
+        (id) =>
+          `<input data-speaker="${id}" list="known-speakers" autocomplete="off" value="${escapeHtml(data.speakers[id] || "")}" placeholder="${id}">`
+      )
+      .join("") + `<datalist id="known-speakers"></datalist>`;
+  renderKnownSpeakers(data.known_speakers || []);
 
   $("speaker-controls").querySelectorAll("input").forEach((input) => {
     input.addEventListener("change", saveSpeakers);
@@ -341,7 +344,20 @@ async function saveSpeakers() {
     body: { speakers },
   });
   current.speakers = res.speakers;
+  // 剛取的新名字也加進清單，其他說話者不必等重新載入就能選。
+  const known = current.known_speakers || [];
+  current.known_speakers = [
+    ...known,
+    ...Object.values(res.speakers).filter((name) => !known.includes(name)),
+  ];
+  renderKnownSpeakers(current.known_speakers);
   renderTranscript(current);
+}
+
+function renderKnownSpeakers(names) {
+  $("known-speakers").innerHTML = names
+    .map((name) => `<option value="${escapeHtml(name)}"></option>`)
+    .join("");
 }
 
 function renderTranscript(data) {
