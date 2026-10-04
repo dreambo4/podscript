@@ -27,6 +27,10 @@ Podcast 逐字稿工具：貼 Apple Podcast 網址 → 分人逐字稿 + 摘要 
 - mp3 保留不自動刪
 - PDF 用瀏覽器列印樣式
 
+## 思辨練習
+**每轉完一集，都要帶使用者做批判性思考練習。** 流程、六個問題與紀錄格式見
+`.claude/思辨練習.md`。Claude 負責提問，不給結論；紀錄存 `notes/<guid>.md`，只留本機
+
 ## 禁止使用 emoji
 介面文字、程式碼、註解、文件、commit 訊息一律不用 emoji。
 需要圖示時用 SVG（手機端見 `mobile-web/index.html` 的 `<symbol>`）；

@@ -2,6 +2,8 @@
 venv/
 models/
 audio/
+# 思辨練習紀錄，只留本機
+notes/
 *.db
 __pycache__/
 .env.local
