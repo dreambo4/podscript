@@ -445,6 +445,32 @@ def fetch_speakers_by_podcast(podcast_name: str) -> dict[str, dict[str, str]]:
     return {guid: _as_json(speakers, {}) for guid, speakers in rows}
 
 
+def fetch_settings(keys: list[str]) -> dict[str, str]:
+    """從 app_settings 表讀取本機端設定（換電腦時不必重填）。
+
+    查詢失敗或未設定 DATABASE_URL 時回傳空 dict，呼叫端應視同未設定。
+
+    Returns:
+        {key: value}；資料庫沒有的 key 不在其中。
+    """
+    url = os.environ.get("DATABASE_URL")
+    if not url or not keys:
+        return {}
+
+    try:
+        with psycopg.connect(url, connect_timeout=CONNECT_TIMEOUT) as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "select key, value from app_settings where key = any(%s)",
+                    (list(keys),),
+                )
+                rows = cur.fetchall()
+    except psycopg.Error:
+        return {}
+
+    return dict(rows)
+
+
 # ── 待處理佇列 ────────────────────────────────────────
 # 手機端只把網址存進 queue 表，下載與轉錄一律在本機端執行。
 

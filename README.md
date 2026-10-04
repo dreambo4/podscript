@@ -62,6 +62,10 @@ cp .env.example .env
 `DATABASE_URL` 留空時僅本機運作，不影響轉錄；要上傳才需要填，
 取得方式見 `.env.example` 內的說明（須用 Session pooler）。
 
+Telegram 推播（轉錄完成或失敗時傳訊息到手機）的 `TELEGRAM_BOT_TOKEN`、`TELEGRAM_CHAT_ID`
+存在資料庫 `app_settings` 表，有 `DATABASE_URL` 就會自動讀到，換電腦不必重填；
+`.env` 填了同名變數則以 `.env` 為準。取得方式見 `.env.example`。
+
 ### 4. 選定轉錄模型
 
 ```bash

@@ -21,7 +21,7 @@ from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from . import audio, pipeline, upload
+from . import audio, notify, pipeline, upload
 from .resolvers import ResolveError, resolve
 
 # 模型、摘要與資料庫設定皆來自 .env，須在建立 app 前載入。
@@ -180,15 +180,22 @@ def _run(job: Job, url: str, force: str | None, num_speakers: int | None) -> Non
         job.stage = "done"
         job.message = "完成"
         job.percent = None
+        notify.job_done(job.title, _elapsed_minutes(job))
     except Exception as exc:  # 背景執行緒需攔下所有例外，否則錯誤不會傳到前端
         job.error = str(exc) or exc.__class__.__name__
         job.message = "處理失敗"
         traceback.print_exc()
+        notify.job_failed(job.title, job.error)
     finally:
         job.done = True
         job.save()
         with _lock:
             _jobs.pop(job.guid, None)
+
+
+def _elapsed_minutes(job: Job) -> int:
+    started = datetime.fromisoformat(job.started_at)
+    return round((datetime.now(timezone.utc) - started).total_seconds() / 60)
 
 
 @app.get("/api/jobs/{guid}")

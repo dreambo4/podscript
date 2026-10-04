@@ -90,3 +90,18 @@ create unique index if not exists queue_url_pending_idx
 -- 兩端的清單都只查 pending 並依時間排序，索引直接涵蓋該查詢。
 create index if not exists queue_pending_idx
   on queue (created_at desc) where status = 'pending';
+
+-- ────────────────────────────────────────────────
+-- 本機端設定（換電腦時不必重填，如 Telegram 推播的 token 與 chat_id）
+--
+-- 新電腦仍需 .env 的 DATABASE_URL 才連得上，故只放「連上資料庫之後」才需要的設定；
+-- .env 有同名變數時以 .env 為準。
+-- 內含密鑰，啟用 RLS 且不設任何 policy：Supabase REST API（anon／authenticated）
+-- 一律讀不到，只有本機以 DATABASE_URL 直連（資料表擁有者，不受 RLS 限制）才讀得到。
+create table if not exists app_settings (
+  key        text primary key,
+  value      text not null,
+  updated_at timestamptz default now()
+);
+
+alter table app_settings enable row level security;
