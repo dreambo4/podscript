@@ -195,8 +195,10 @@ def build_payload(directory: Path) -> dict:
         "transcript": json.dumps(segments, ensure_ascii=False),
         "speakers": json.dumps(result.speakers, ensure_ascii=False),
         "provenance": json.dumps(result.provenance.to_dict(), ensure_ascii=False),
-        # jsonb 無法建 trgm 索引，另存攤平的純文字供中文搜尋
-        "transcript_text": "".join(seg.text for seg in result.segments),
+        # jsonb 無法建 trgm 索引，另存攤平的純文字供中文搜尋；文章保留段落分隔
+        "transcript_text": ("\n" if pipeline.is_article(episode) else "").join(
+            seg.text for seg in result.segments
+        ),
     }
 
 

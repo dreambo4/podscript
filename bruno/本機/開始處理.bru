@@ -13,6 +13,9 @@ post {
 body:json {
   {
     "url": "https://podcasts.apple.com/tw/podcast/...",
+    "kind": "auto",
+    "text": null,
+    "title": null,
     "force": null,
     "num_speakers": null,
     "queue_id": null
@@ -21,6 +24,10 @@ body:json {
 
 docs {
   解析網址並在背景開始處理，回傳 job。
+  kind：auto（預設，Apple Podcast 與 YouTube 以外的網址視為文章）／podcast／article。
+  text：貼上的文章全文；有值時不抓網頁、url 可留空，guid 以內文雜湊產生。title 為其標題，留空取第一段開頭。
+  文章在這裡就擷取正文，抓不到或少於 300 字直接回 400，訊息提示改用貼上全文。
+  回應的 kind 為 podcast／article；文章的 stages 只有 resolve、summarize。
   force：從哪個階段起重跑（download／transcribe／diarize／summarize），之後階段一併重跑。
   queue_id：由待處理清單觸發時帶入，供回填標題與結案。
 }

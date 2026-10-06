@@ -213,6 +213,22 @@ button:disabled { opacity: .5; cursor: default; }
   color: #fff;
 }
 
+.start select {
+  padding: 0 8px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--card);
+  color: var(--ink);
+  font: inherit;
+}
+
+.start button.secondary {
+  background: var(--card);
+  border-color: var(--line);
+  color: var(--ink);
+  white-space: nowrap;
+}
+
 .card {
   background: var(--card);
   border: 1px solid var(--line);
@@ -556,6 +572,33 @@ dialog h3 { margin: 0 0 16px; font-size: 16px; }
 dialog label { display: block; margin-bottom: 8px; }
 dialog hr { border: 0; border-top: 1px solid var(--line); margin: 16px 0; }
 dialog menu { display: flex; gap: 8px; justify-content: flex-end; margin: 20px 0 0; padding: 0; }
+
+.paste-dialog { width: min(640px, calc(100vw - 32px)); box-sizing: border-box; }
+.paste-dialog input,
+.paste-dialog textarea {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  margin-bottom: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  font: inherit;
+}
+.paste-dialog textarea { resize: vertical; line-height: 1.6; }
+dialog button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+
+/* 文章原文：只有段落，沒有時間與說話者 */
+.article-text p { margin: 0 0 14px; line-height: 1.8; }
+.ep-kind {
+  display: inline-block;
+  margin-right: 6px;
+  padding: 0 5px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  font-size: 11px;
+  color: var(--muted);
+}
 
 .error { color: #a33; }
 

@@ -9,6 +9,7 @@
 | 3 | 章節導覽 | 優先 | 先本機試行，再上手機 | 手機階段需要 |
 | 4 | 逐字稿修正 | 做法待討論 | 本機 | 不需要 |
 | 5 | Telegram 推播 | 已完成（2026-10-05） | 本機 | 新增 `app_settings` 表 |
+| 6 | 文章／新聞摘要 | 已上線（2026-10-06），待使用者驗收 | 本機＋手機 | 不需要 |
 
 共通規則：改到任何端點，同一輪要補 `bruno/` 的 `.bru`；DDL 只提供 SQL 由使用者執行。
 
@@ -156,6 +157,58 @@
 - Claude app：沒有對外推播的 API
 - LINE：LINE Notify 已停止服務；Messaging API 設定繁瑣，而且有則數上限
 - 手機網頁推播：要產生推播金鑰、新增資料表存訂閱，成本高
+
+---
+
+## 6. 文章／新聞摘要
+
+除了影音，也能丟新聞或文章進來：不轉錄、沒有說話者，只產生摘要、心智圖、標籤。
+
+**現況**
+- `summary.generate()` 只吃一個文字檔路徑，不在乎文字來源；`PROMPT` 寫死「Podcast 逐字稿、無標點、SPEAKER_00」
+- `resolvers.resolve()` 只認 Apple、YouTube，其他網址丟 `ResolveError`
+- `episodes.platform` 本來就預留多平台；`duration_sec`、`published_at` 可為 null；`transcript` 是 `not null`
+- 手機 `queue` 只驗證 http(s)，解析交給本機 resolver，文章網址可直接入列
+
+**已定案（2026-10-05，使用者決定）**
+1. 類型判斷：輸入框旁加「自動／Podcast／文章」切換，預設自動（Apple、YouTube 以外視為文章），判斷錯可手動改
+2. 支援直接貼上全文（付費牆、電子報等抓不到正文時用）
+3. 原文全文上傳資料庫，存進 `transcript_text`，沿用現有內文搜尋
+4. 標籤與 Podcast 共用同一標籤庫，照常走標籤收斂
+5. 短文章也照樣產生心智圖
+6. 摘要模型與 Podcast 相同（`CLAUDE_CLI_MODEL`）
+
+**已知限制（2026-10-06 決定維持現狀）**
+- 自動模式只認得 Apple、YouTube，Spotify、SoundOn 等尚未支援的 Podcast 平台網址會被當成文章：
+  頁面靠 JS 載入的會回「正文太短」，有長篇節目介紹的則會拿介紹文去產生摘要
+- 之後若要處理：先加已知 Podcast 平台網域名單直接回錯誤；漏網再加頁面特徵（`og:audio`、`<audio>`、RSS 連結）判斷
+- 新聞網站正文結尾常夾帶相關新聞標題等雜訊，`favor_precision` 實測無效（聯合報整篇抓不到），改由 prompt 請模型忽略
+
+**做法：本機**
+- 新增 `resolvers/article.py`：抓網頁、擷取正文／標題／媒體名稱／發布時間（`trafilatura`，**新套件，安裝前須使用者同意**）
+  - `platform = "article"`，`podcast_name` 填媒體名稱（抓不到用網域），`duration_sec = None`
+  - `episode_guid`：去掉 `utm_*`、`fbclid` 等追蹤參數後的網址取雜湊，前綴 `article-`
+  - 正文少於 300 字視為擷取失敗，錯誤訊息提示改用「貼上全文」
+- 貼上全文：`ProcessRequest` 加 `text`、`title`、`kind`；有 `text` 時不抓網頁，`guid` 以內文雜湊產生，`source_url` 可空
+- `pipeline.py` 新增 `process_article()`：寫出 `article.txt`，跳過下載／轉錄／分離，直接呼叫 `summarize()`
+  - `summary.py` 新增文章版 `ARTICLE_PROMPT`，依 `platform` 選用；`_parse_cli_output` 與標籤收斂共用
+- 上傳：每段正文存成 `transcript` 的一個片段（`start`／`end` 為 0、`speaker` 為空字串），
+  `transcript_text` 以換行串接各段；上傳、重新生成、搜尋定位都沿用逐字稿的格式，不需 DDL
+- 本機結果頁：文章隱藏說話者、音檔、低信心；「逐字稿」區改顯示「原文」段落
+- 輸入框 placeholder 與錯誤訊息更新；Bruno 更新「開始處理」的 `.bru`
+
+**做法：手機**
+- 列表：文章類以 SVG 圖示區分，meta 顯示媒體名稱，不顯示時長
+- 詳細頁：分頁標題「逐字稿」改為「原文」，以 `transcript_text` 分段顯示；搜尋命中定位照常可用
+- 手機後端：確認 `DETAIL_COLUMNS` 有回傳 `transcript_text` 與 `platform`，沒有就補上；Bruno 同步更新
+
+**驗收**
+- 貼一般新聞網址（自動模式）能產出摘要、心智圖、標籤，上傳後手機看得到
+- 付費牆網址顯示擷取失敗並提示貼全文；貼全文後正常產出
+- 同一篇帶不同 `utm` 參數只產生一筆
+- 手機搜尋文章內文的字能命中並定位
+- 既有 Podcast／YouTube 流程不受影響
+- 從手機待處理清單貼入的文章網址，本機能正常處理
 
 ---
 

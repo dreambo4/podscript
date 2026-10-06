@@ -273,8 +273,8 @@ function renderEpisodeCard(ep) {
     <a href="${href}" class="ep-link">
       ${renderCoverHtml(ep.podcast_name)}
       <div class="ep-body">
-        <span class="ep-title">${ep.title}</span>
-        <span class="ep-meta">${ep.podcast_name}${ep.published_at ? " · " + ep.published_at.slice(0, 10) : ""}${ep.duration_sec ? " · " + formatDuration(ep.duration_sec) : ""}</span>
+        <span class="ep-title">${escapeHtml(ep.title)}</span>
+        <span class="ep-meta">${isArticle(ep) ? `<svg class="icon icon-xs ep-kind-icon" aria-label="文章"><use href="#ic-article"/></svg>` : ""}${escapeHtml(ep.podcast_name)}${ep.published_at ? " · " + ep.published_at.slice(0, 10) : ""}${ep.duration_sec ? " · " + formatDuration(ep.duration_sec) : ""}</span>
         ${snippetHtml(ep)}
         <span class="tags">${cardTagsHtml(ep.hashtags)}</span>
       </div>
@@ -886,7 +886,11 @@ function formatTime(sec) {
   return `${m}:${String(s).padStart(2, "0")}`;
 }
 
-const PLATFORM_LABELS = { apple: "Apple Podcasts", youtube: "YouTube" };
+const PLATFORM_LABELS = { apple: "Apple Podcasts", youtube: "YouTube", article: "原網站" };
+
+function isArticle(ep) {
+  return ep?.platform === "article";
+}
 
 /**
  * 只接受 https 網址。source_url 會放進 href，
@@ -919,6 +923,13 @@ function renderTranscript(ep, query = "", options = {}) {
   const container = document.querySelector("#transcript");
   const speakers = ep.speakers || {};
   container.innerHTML = "";
+  // 文章只有段落，沒有時間與說話者
+  if (isArticle(ep)) {
+    container.innerHTML = `<div class="article-text">${(ep.transcript || [])
+      .map(seg => `<p>${highlightHtml(seg.text, query, options)}</p>`)
+      .join("")}</div>`;
+    return;
+  }
   (ep.transcript || []).forEach(seg => {
     const name = speakers[seg.speaker] || seg.speaker;
     const div = document.createElement("div");
@@ -1061,6 +1072,7 @@ async function loadDetail(guid, query = "", options = {}) {
   document.querySelector("#ep-meta").textContent =
     `${ep.podcast_name}${ep.published_at ? " · " + ep.published_at.slice(0, 10) : ""}${ep.duration_sec ? " · " + formatDuration(ep.duration_sec) : ""}`;
   renderSourceLink(ep);
+  document.querySelector('.subtab[data-sub="transcript"]').textContent = isArticle(ep) ? "原文" : "逐字稿";
   document.querySelector("#summary-text").textContent = ep.summary || "（尚無摘要）";
   document.querySelector("#hashtags").innerHTML =
     (ep.hashtags || []).map(t => `<a href="#/?tag=${encodeURIComponent(t)}"><span><svg class="icon icon-xs"><use href="#ic-tag"/></svg>${t}</span></a>`).join("");

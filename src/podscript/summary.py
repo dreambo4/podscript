@@ -36,6 +36,30 @@ hashtags 規則：
 - SPEAKER_00 與 SPEAKER_01 是不同說話者
 - mindmap 須為可直接渲染的合法 Mermaid 語法，階層以縮排表示"""
 
+ARTICLE_PROMPT = """請讀取 {path}，這是一篇文章（新聞、評論或專欄等）的全文。
+
+產生以下三項，並以 JSON 格式輸出：
+
+1. summary：約 100 字的繁體中文摘要，須涵蓋全文重點，不可只寫導言或開頭幾段的內容
+2. mindmap：Mermaid mindmap 語法的架構心智圖，反映文章實際的論述脈絡
+3. hashtags：5 個主題標籤，用於搜尋與分類
+
+hashtags 規則：
+- 不得使用人名（作者、受訪者、文中提及的人物皆不可）
+- 以主題、領域、概念為準，例如 房地產、談判技巧、投資理財
+- 不含 # 符號，每個標籤 2-6 字
+
+輸出格式（只輸出 JSON，不要任何說明文字）：
+{{"summary": "...", "mindmap": "mindmap\\n  root((主題))\\n    分支一\\n      細項", "hashtags": ["標籤一", "標籤二", "標籤三", "標籤四", "標籤五"]}}
+
+注意：
+- 全文由網頁自動擷取，結尾可能夾雜相關新聞標題、發布時間列表、「繼續閱讀」等網站雜訊，請忽略
+- 原文以外的資訊不要寫進摘要與心智圖
+- mindmap 須為可直接渲染的合法 Mermaid 語法，階層以縮排表示"""
+
+# 依內容類型選用的提示；鍵對應 pipeline 的 content_kind。
+PROMPTS = {"podcast": PROMPT, "article": ARTICLE_PROMPT}
+
 # 標籤收斂：生成階段不能讓標籤庫干擾 AI 選字，否則標籤會趨同、失去精準度，
 # 故收斂為生成完成後的獨立第二次呼叫，只做同義判斷不重新生成。
 RECONCILE_MODEL = "haiku"
@@ -97,8 +121,13 @@ class SummaryProvider(ABC):
     """摘要與心智圖的生成後端。"""
 
     @abstractmethod
-    def generate(self, transcript_path: Path, *, model: str) -> Summary:
-        """讀取逐字稿，產生摘要與心智圖。
+    def generate(
+        self, transcript_path: Path, *, model: str, kind: str = "podcast"
+    ) -> Summary:
+        """讀取逐字稿或文章全文，產生摘要與心智圖。
+
+        Args:
+            kind: 內容類型，podcast 或 article，決定使用的提示。
 
         Raises:
             SummaryError: 生成失敗或回傳格式無法解析。
@@ -111,7 +140,9 @@ class ClaudeCliProvider(SummaryProvider):
     def __init__(self, *, timeout: int = 600) -> None:
         self.timeout = timeout
 
-    def generate(self, transcript_path: Path, *, model: str = "sonnet") -> Summary:
+    def generate(
+        self, transcript_path: Path, *, model: str = "sonnet", kind: str = "podcast"
+    ) -> Summary:
         if not transcript_path.exists():
             raise SummaryError(f"找不到逐字稿 {transcript_path}")
 
@@ -121,7 +152,7 @@ class ClaudeCliProvider(SummaryProvider):
                 [
                     "claude",
                     "-p",
-                    PROMPT.format(path=transcript_path),
+                    PROMPTS[kind].format(path=transcript_path),
                     "--model",
                     model,
                     "--output-format",

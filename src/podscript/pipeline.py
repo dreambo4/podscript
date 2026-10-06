@@ -17,8 +17,12 @@ from typing import Callable
 from . import audio, diarize, postprocess, summary, transcribe
 from . import resolvers
 from .resolvers import Episode, resolve
+from .resolvers.article import PLATFORM as ARTICLE_PLATFORM, Article
 
 STAGES = ("download", "transcribe", "diarize", "merge", "summarize")
+
+# 文章沒有音檔，只有摘要一個階段。
+ARTICLE_STAGES = ("summarize",)
 
 # (階段, 訊息, 百分比)。百分比僅轉錄階段有值，其餘為 None。
 ProgressFn = Callable[[str, str, "int | None"], None]
@@ -150,6 +154,49 @@ def process(
     return result
 
 
+def process_article(
+    article: Article,
+    *,
+    force: bool = False,
+    summary_model: str | None = None,
+    on_progress: ProgressFn | None = None,
+) -> Result:
+    """處理文章：寫出正文後直接產生摘要，不經下載、轉錄與說話者分離。
+
+    每段正文存成一個片段（時間為 0、無說話者），
+    與逐字稿共用同一份資料格式，上傳、搜尋與重新生成都不必另外處理。
+
+    Args:
+        force: 已有摘要時是否重新生成。
+    """
+    notify = on_progress or (lambda stage, message, percent=None: None)
+    episode = article.episode
+    directory = audio.episode_dir(episode.episode_guid)
+
+    result = Result(
+        episode=episode,
+        segments=[
+            diarize.DiarizedSegment(
+                start=0.0, end=0.0, speaker="", text=text, confidence=1.0
+            )
+            for text in article.paragraphs
+        ],
+        speakers={},
+        provenance=Provenance(),
+    )
+    _write_outputs(directory, result)
+
+    notify("summarize", "產生摘要、心智圖與標籤", None)
+    summarize(
+        directory, result=result, force=force, summary_model=summary_model
+    )
+    return result
+
+
+def is_article(episode: Episode) -> bool:
+    return episode.platform == ARTICLE_PLATFORM
+
+
 def summarize(
     directory: Path,
     *,
@@ -181,7 +228,9 @@ def summarize(
             os.environ.get("SUMMARY_PROVIDER", "claude_cli")
         )
         try:
-            generated = provider.generate(transcript, model=model)
+            generated = provider.generate(
+                transcript, model=model, kind=_content_kind(directory, result)
+            )
         except summary.SummaryError:
             return None
 
@@ -222,9 +271,7 @@ def _summary_transcript(directory: Path, result: Result | None):
 
     directory.mkdir(parents=True, exist_ok=True)
     rebuilt = directory / "transcript.summary.txt"
-    rebuilt.write_text(
-        format_transcript(result.segments, result.speakers), encoding="utf-8"
-    )
+    rebuilt.write_text(format_text(result), encoding="utf-8")
     try:
         yield rebuilt
     finally:
@@ -319,9 +366,24 @@ def _write_outputs(directory: Path, result: Result) -> None:
     (directory / "transcript.json").write_text(
         json.dumps(result.to_dict(), ensure_ascii=False, indent=2), encoding="utf-8"
     )
-    (directory / "transcript.txt").write_text(
-        format_transcript(result.segments, result.speakers), encoding="utf-8"
-    )
+    (directory / "transcript.txt").write_text(format_text(result), encoding="utf-8")
+
+
+def format_text(result: Result) -> str:
+    """輸出供 claude CLI 讀取的全文：文章為標題加段落，其餘為逐字稿。"""
+    if is_article(result.episode):
+        paragraphs = [s.text for s in result.segments]
+        # 貼上全文未填標題時，標題就是第一段開頭，不重複列出
+        if not (paragraphs and paragraphs[0].startswith(result.episode.title)):
+            paragraphs.insert(0, result.episode.title)
+        return "\n\n".join(paragraphs)
+    return format_transcript(result.segments, result.speakers)
+
+
+def _content_kind(directory: Path, result: Result | None) -> str:
+    """摘要提示的內容類型；未傳入 result 時讀目錄中的處理結果判斷。"""
+    loaded = result or load_result(directory)
+    return "article" if loaded and is_article(loaded.episode) else "podcast"
 
 
 def format_transcript(

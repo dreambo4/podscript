@@ -14,6 +14,7 @@ from collections import Counter
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Callable, Literal
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
@@ -22,7 +23,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from . import audio, notify, pipeline, upload
-from .resolvers import ResolveError, resolve
+from .resolvers import ResolveError, article, is_media_url, resolve
 
 # 模型、摘要與資料庫設定皆來自 .env，須在建立 app 前載入。
 load_dotenv(Path(__file__).resolve().parents[2] / ".env")
@@ -43,6 +44,7 @@ class Job:
     guid: str
     title: str
     url: str = ""
+    kind: str = "podcast"  # podcast 或 article，決定有哪些階段
     stage: str = "queued"
     message: str = "等待開始"
     percent: int | None = None
@@ -58,6 +60,7 @@ class Job:
             "guid": self.guid,
             "title": self.title,
             "url": self.url,
+            "kind": self.kind,
             "stage": self.stage,
             "message": self.message,
             "percent": self.percent,
@@ -65,7 +68,10 @@ class Job:
             "error": self.error,
             "started_at": self.started_at,
             "updated_at": self.updated_at,
-            "stages": ["resolve", *pipeline.STAGES],
+            "stages": [
+                "resolve",
+                *(pipeline.ARTICLE_STAGES if self.kind == "article" else pipeline.STAGES),
+            ],
         }
 
     def save(self) -> None:
@@ -111,7 +117,11 @@ def _read_job(guid: str) -> Job | None:
 
 
 class ProcessRequest(BaseModel):
-    url: str
+    url: str = ""
+    # auto：Apple、YouTube 以外的網址視為文章
+    kind: Literal["auto", "podcast", "article"] = "auto"
+    text: str | None = None  # 貼上的文章全文；有值時不抓網頁
+    title: str | None = None  # 貼上全文時的標題，留空取第一段開頭
     force: str | None = None
     num_speakers: int | None = None
     queue_id: str | None = None  # 由待處理清單觸發時帶入，供回填標題與結案
@@ -128,9 +138,30 @@ class HashtagDecisionRequest(BaseModel):
 
 @app.post("/api/process")
 def start_process(req: ProcessRequest) -> dict:
-    """解析網址並在背景開始處理。"""
+    """解析網址（或貼上的全文）並在背景開始處理。
+
+    文章在這裡就抓好正文，擷取失敗直接回 400，
+    讓使用者當場改用貼上全文。
+    """
+    if not req.text and not req.url.strip():
+        raise HTTPException(status_code=400, detail="請貼上網址或文章全文")
+
     try:
-        episode = resolve(req.url)
+        if req.text or req.kind == "article" or (
+            req.kind == "auto" and not is_media_url(req.url)
+        ):
+            parsed = (
+                article.from_text(req.text, title=req.title or "")
+                if req.text
+                else article.resolve_url(req.url)
+            )
+            episode = parsed.episode
+            kind = "article"
+            task = _article_task(parsed, force=req.force == "summarize")
+        else:
+            episode = resolve(req.url)
+            kind = "podcast"
+            task = _podcast_task(req.url, req.force, req.num_speakers)
     except ResolveError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
@@ -145,20 +176,35 @@ def start_process(req: ProcessRequest) -> dict:
         running = _jobs.get(guid)
         if running and not running.done:
             return running.to_dict()
-        job = Job(guid=guid, title=episode.title, url=req.url)
+        job = Job(guid=guid, title=episode.title, url=episode.source_url, kind=kind)
         job.save()
         _jobs[guid] = job
 
-    thread = threading.Thread(
-        target=_run,
-        args=(job, req.url, req.force, req.num_speakers),
-        daemon=True,
-    )
+    thread = threading.Thread(target=_run, args=(job, task), daemon=True)
     thread.start()
     return job.to_dict()
 
 
-def _run(job: Job, url: str, force: str | None, num_speakers: int | None) -> None:
+Task = Callable[[pipeline.ProgressFn], object]
+
+
+def _podcast_task(url: str, force: str | None, num_speakers: int | None) -> Task:
+    return lambda on_progress: pipeline.process(
+        url,
+        model=os.environ.get("WHISPER_MODEL", "large-v2"),
+        force=force,
+        num_speakers=num_speakers,
+        on_progress=on_progress,
+    )
+
+
+def _article_task(parsed: article.Article, *, force: bool = False) -> Task:
+    return lambda on_progress: pipeline.process_article(
+        parsed, force=force, on_progress=on_progress
+    )
+
+
+def _run(job: Job, task: Task) -> None:
     """背景執行整條流程，把進度寫回 job。"""
 
     def on_progress(stage: str, message: str, percent: int | None = None) -> None:
@@ -170,13 +216,7 @@ def _run(job: Job, url: str, force: str | None, num_speakers: int | None) -> Non
             job.save()
 
     try:
-        pipeline.process(
-            url,
-            model=os.environ.get("WHISPER_MODEL", "large-v2"),
-            force=force,
-            num_speakers=num_speakers,
-            on_progress=on_progress,
-        )
+        task(on_progress)
         job.stage = "done"
         job.message = "完成"
         job.percent = None
@@ -222,24 +262,46 @@ def resume_job(guid: str) -> dict:
     previous = _read_job(guid)
     if previous is None:
         raise HTTPException(status_code=404, detail="查無此任務")
-    if not previous.url:
+
+    task = _resume_task(guid, previous)
+    if task is None:
         raise HTTPException(
-            status_code=400, detail="這筆紀錄沒有原始網址，請重新貼上網址"
+            status_code=400, detail="這筆紀錄沒有原始網址，請重新貼上網址或全文"
         )
 
     with _lock:
         running = _jobs.get(guid)
         if running and not running.done:
             return running.to_dict()
-        job = Job(guid=guid, title=previous.title, url=previous.url)
+        job = Job(guid=guid, title=previous.title, url=previous.url, kind=previous.kind)
         job.save()
         _jobs[guid] = job
 
-    thread = threading.Thread(
-        target=_run, args=(job, previous.url, None, None), daemon=True
-    )
+    thread = threading.Thread(target=_run, args=(job, task), daemon=True)
     thread.start()
     return job.to_dict()
+
+
+def _resume_task(guid: str, previous: Job) -> Task | None:
+    """接續用的任務；文章已有正文就只補摘要，不必重抓網頁。"""
+    if previous.kind != "article":
+        return _podcast_task(previous.url, None, None) if previous.url else None
+
+    directory = _episode_dir(guid)
+    result = pipeline.load_result(directory)
+    if result is not None:
+
+        def summarize_only(on_progress: pipeline.ProgressFn) -> None:
+            on_progress("summarize", "產生摘要、心智圖與標籤", None)
+            pipeline.summarize(directory, result=result)
+
+        return summarize_only
+    if not previous.url:
+        return None
+    try:
+        return _article_task(article.resolve_url(previous.url))
+    except ResolveError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 @app.get("/api/queue")
@@ -331,6 +393,9 @@ def _episode_summary(
         "published_at": episode.to_dict()["published_at"] if episode else None,
         "created_at": job.started_at if job else "",
         "duration_sec": episode.duration_sec if episode else None,
+        "kind": "article"
+        if (episode and pipeline.is_article(episode)) or (job and job.kind == "article")
+        else "podcast",
         "hashtags": summary_data.get("hashtags", []),
         "has_summary": bool(summary_data.get("summary")),
         "ready": result is not None,
@@ -378,7 +443,9 @@ def get_episode(guid: str) -> dict:
         "uploaded_at": upload.uploaded_at(guid),
         "has_audio": (directory / "source.mp3").exists(),
         "from_db": from_db,
-        "known_speakers": _known_speakers(result.episode.podcast_name),
+        "known_speakers": []
+        if pipeline.is_article(result.episode)
+        else _known_speakers(result.episode.podcast_name),
     }
 
 

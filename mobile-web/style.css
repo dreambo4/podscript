@@ -459,6 +459,7 @@ body {
 .ep-body { flex: 1; min-width: 0; }
 .ep-title { display: block; font-weight: 700; font-size: 14px; line-height: 1.5; margin-bottom: 4px; padding-right: 26px; }
 .ep-meta { display: block; font-size: 12px; color: var(--muted); margin-bottom: 6px; }
+.ep-kind-icon { margin-right: 4px; vertical-align: -1px; }
 .ep-snippet { display: block; font-size: 12px; line-height: 1.6; color: var(--ink); margin-bottom: 6px; }
 .ep-snippet mark { background: var(--accent-soft); color: var(--accent); font-weight: 700; border-radius: 3px; padding: 0 1px; }
 .ep-match-count { margin-left: 6px; color: var(--muted); white-space: nowrap; }
@@ -879,6 +880,10 @@ a.seg-time { color: var(--accent); text-decoration: underline; text-underline-of
 .seg p { margin: 0; }
 .seg mark { background: var(--accent-soft); color: inherit; border-radius: 3px; padding: 0 1px; }
 .seg mark.current { background: var(--accent); color: var(--accent-ink); }
+/* 文章原文：只有段落，沒有時間與說話者 */
+.article-text p { margin: 0 0 14px; line-height: 1.8; }
+.article-text mark { background: var(--accent-soft); color: inherit; border-radius: 3px; padding: 0 1px; }
+.article-text mark.current { background: var(--accent); color: var(--accent-ink); }
 
 /* 逐字稿命中導覽列：浮在底部中央 */
 .hit-nav {

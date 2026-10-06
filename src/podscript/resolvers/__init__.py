@@ -14,6 +14,12 @@ _RESOLVERS: list[PlatformResolver] = [
 ]
 
 
+def is_media_url(url: str) -> bool:
+    """是否為支援的影音平台網址；自動判斷類型時，其餘網址一律視為文章。"""
+    url = url.strip()
+    return any(resolver.can_handle(url) for resolver in _RESOLVERS)
+
+
 def resolve(url: str) -> Episode:
     """依網址選用對應平台的 resolver。
 

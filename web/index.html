@@ -24,8 +24,14 @@
     </a>
   </h1>
   <form id="start-form" class="start">
-    <input id="url" type="url" placeholder="貼上 Apple Podcast 單集或 YouTube 影片網址…" required>
+    <select id="kind" aria-label="內容類型" title="自動：Apple Podcast 與 YouTube 以外的網址視為文章">
+      <option value="auto">自動</option>
+      <option value="podcast">Podcast</option>
+      <option value="article">文章</option>
+    </select>
+    <input id="url" type="url" placeholder="貼上 Podcast、YouTube 或文章網址…" required>
     <button type="submit">開始</button>
+    <button id="btn-paste" type="button" class="secondary" title="付費文章或抓不到正文時，直接貼上全文">貼上全文</button>
   </form>
 </header>
 
@@ -47,7 +53,7 @@
   <main id="content">
 
     <section id="empty" class="card placeholder">
-      <p>貼上 Apple Podcast 單集或 YouTube 影片網址開始，<br>或從左側選擇已處理的單集。</p>
+      <p>貼上 Apple Podcast 單集、YouTube 影片或文章網址開始，<br>或從左側選擇已處理的單集。</p>
     </section>
 
     <section id="progress" class="card" hidden>
@@ -100,7 +106,7 @@
 
       <div class="block">
         <div class="block-head">
-          <h3>逐字稿</h3>
+          <h3 id="transcript-heading">逐字稿</h3>
           <div id="speaker-controls" class="speakers"></div>
         </div>
         <div id="transcript"></div>
@@ -115,13 +121,25 @@
     <h3>下載</h3>
     <label><input type="checkbox" name="part" value="summary" checked> 摘要</label>
     <label><input type="checkbox" name="part" value="mindmap" checked> 心智圖</label>
-    <label><input type="checkbox" name="part" value="transcript" checked> 逐字稿</label>
+    <label><input type="checkbox" name="part" value="transcript" checked> <span id="download-transcript-label">逐字稿</span></label>
     <hr>
     <label><input type="radio" name="format" value="md" checked> Markdown</label>
     <label><input type="radio" name="format" value="pdf"> PDF</label>
     <menu>
       <button value="cancel">取消</button>
       <button id="btn-do-download" value="ok" type="button">下載</button>
+    </menu>
+  </form>
+</dialog>
+
+<dialog id="paste-dialog" class="paste-dialog">
+  <form id="paste-form" method="dialog">
+    <h3>貼上文章全文</h3>
+    <input id="paste-title" type="text" placeholder="標題（留空取第一段開頭）">
+    <textarea id="paste-text" rows="14" placeholder="貼上文章內容…" required></textarea>
+    <menu>
+      <button value="cancel" formnovalidate>取消</button>
+      <button id="btn-paste-submit" value="ok" class="primary">開始</button>
     </menu>
   </form>
 </dialog>

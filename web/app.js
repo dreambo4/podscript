@@ -22,14 +22,41 @@ $("start-form").addEventListener("submit", async (e) => {
   const url = $("url").value.trim();
   if (!url) return;
 
-  const btn = e.target.querySelector("button");
+  const btn = e.target.querySelector("button[type=submit]");
   btn.disabled = true;
   try {
-    const job = await api("/api/process", { method: "POST", body: { url } });
+    await startJob({ url, kind: $("kind").value });
     $("url").value = "";
-    // 交給 hash 驅動：網址成為唯一狀態來源，刷新後仍停在這一集。
-    location.hash = job.guid;
-    await loadLibrary();
+  } catch (err) {
+    alert(err.message);
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+/** 送出處理並切到該集；交給 hash 驅動，刷新後仍停在這一集。 */
+async function startJob(body) {
+  const job = await api("/api/process", { method: "POST", body });
+  location.hash = job.guid;
+  await loadLibrary();
+}
+
+// 付費文章或抓不到正文時，直接貼上全文。
+$("btn-paste").addEventListener("click", () => $("paste-dialog").showModal());
+
+$("paste-form").addEventListener("submit", async (e) => {
+  if (e.submitter?.value !== "ok") return;
+  e.preventDefault();
+  const text = $("paste-text").value.trim();
+  if (!text) return;
+
+  const btn = $("btn-paste-submit");
+  btn.disabled = true;
+  try {
+    await startJob({ text, title: $("paste-title").value.trim() });
+    $("paste-dialog").close();
+    $("paste-title").value = "";
+    $("paste-text").value = "";
   } catch (err) {
     alert(err.message);
   } finally {
@@ -180,8 +207,13 @@ async function showEpisode(guid) {
   $("ep-title").textContent = data.episode.title;
   renderUploadState();
 
+  const article = isArticle(data.episode);
+  $("transcript-heading").textContent = article ? "原文" : "逐字稿";
+  $("download-transcript-label").textContent = article ? "原文" : "逐字稿";
+
   renderSummary(data.summary);
-  renderSpeakers(data);
+  if (article) $("speaker-controls").innerHTML = "";
+  else renderSpeakers(data);
   renderTranscript(data);
   window.scrollTo({ top: 0, behavior: "smooth" });
 }
@@ -361,6 +393,13 @@ function renderKnownSpeakers(names) {
 }
 
 function renderTranscript(data) {
+  if (isArticle(data.episode)) {
+    $("transcript").innerHTML = `<div class="article-text">${data.segments
+      .map((s) => `<p>${escapeHtml(s.text)}</p>`)
+      .join("")}</div>`;
+    return;
+  }
+
   $("transcript").innerHTML = data.segments
     .map((s) => {
       const name = data.speakers[s.speaker] || s.speaker;
@@ -385,7 +424,11 @@ function renderTranscript(data) {
   });
 }
 
-const PLATFORM_LABELS = { apple: "Apple Podcasts", youtube: "YouTube" };
+const PLATFORM_LABELS = { apple: "Apple Podcasts", youtube: "YouTube", article: "原網站" };
+
+function isArticle(episode) {
+  return episode?.platform === "article";
+}
 
 /**
  * 只接受 https 網址。source_url 會放進 href，
@@ -479,7 +522,9 @@ $("btn-delete").addEventListener("click", async (e) => {
   const uploaded = Boolean(current.uploaded_at);
   const warning = uploaded
     ? "資料庫與本機檔案都會刪除，手機端也會看不到，所有人的收藏一併移除。"
-    : "本機檔案（含音檔與轉錄結果）都會刪除。";
+    : isArticle(current.episode)
+      ? "本機檔案（原文與摘要）都會刪除。"
+      : "本機檔案（含音檔與轉錄結果）都會刪除。";
   if (!confirm(`確定要刪除「${current.episode.title}」？\n${warning}\n此動作無法復原。`)) return;
 
   const btn = e.target;
@@ -507,7 +552,7 @@ function renderUploadState() {
       : "",
     current.provenance?.transcribe_model,
     uploaded ? `已上傳 ${current.uploaded_at.slice(0, 10)}` : "尚未上傳",
-    current.has_audio === false ? "音檔已刪除" : "",
+    current.has_audio === false && !isArticle(current.episode) ? "音檔已刪除" : "",
   ].filter(Boolean);
   $("ep-meta").textContent = meta.join(" · ");
   renderSourceLink(current.episode);
@@ -549,7 +594,11 @@ function downloadMarkdown(parts) {
   if (parts.includes("mindmap") && d.summary?.mindmap) {
     lines.push("## 心智圖", "", "```mermaid", d.summary.mindmap, "```", "");
   }
-  if (parts.includes("transcript")) {
+  if (parts.includes("transcript") && isArticle(d.episode)) {
+    lines.push("## 原文", "");
+    if (safeSourceUrl(d.episode.source_url)) lines.push(d.episode.source_url, "");
+    for (const s of d.segments) lines.push(s.text, "");
+  } else if (parts.includes("transcript")) {
     lines.push("## 逐字稿", "");
     for (const s of d.segments) {
       const name = d.speakers[s.speaker] || s.speaker;
@@ -739,15 +788,16 @@ function episodeRow(e, selected) {
           ? "未完成，點擊繼續"
           : !e.has_summary
             ? "未生成摘要"
-            : !e.has_audio
+            : !e.has_audio && e.kind !== "article"
               ? "已釋出空間"
               : "",
       ]
         .filter(Boolean)
         .join(" · ")}</span>`;
 
+  const kind = e.kind === "article" ? `<span class="ep-kind">文章</span>` : "";
   return `<li data-guid="${e.guid}" class="${selected ? "selected" : ""}">
-    <span class="ep-name">${escapeHtml(e.title)}</span>
+    <span class="ep-name">${kind}${escapeHtml(e.title)}</span>
     ${meta}
   </li>`;
 }

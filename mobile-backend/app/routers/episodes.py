@@ -15,7 +15,7 @@ TAG_MODE_OPERATORS = {
 
 LIST_COLUMNS = """
     e.id, e.episode_guid, e.podcast_name, e.title, e.published_at, e.created_at,
-    e.duration_sec, e.hashtags, (f.episode_id is not null) as is_favorite
+    e.duration_sec, e.hashtags, (f.episode_id is not null) as is_favorite, e.platform
 """
 
 DETAIL_COLUMNS = """
@@ -77,6 +77,7 @@ def _row_to_summary(row: tuple) -> dict:
         "duration_sec": row[6],
         "hashtags": row[7] or [],
         "is_favorite": row[8],
+        "platform": row[9],
         "snippet": None,
         "match_count": 0,
     }
@@ -85,7 +86,7 @@ def _row_to_summary(row: tuple) -> dict:
 def _row_to_match(row: tuple) -> dict:
     """LIST_COLUMNS 之後接 MATCH_COLUMNS 的列；只命中標題時 snippet 為 None。"""
     item = _row_to_summary(row)
-    snippet, cut_start, cut_end, match_count = row[9:13]
+    snippet, cut_start, cut_end, match_count = row[10:14]
     if snippet:
         item["snippet"] = ("…" if cut_start else "") + snippet + ("…" if cut_end else "")
     item["match_count"] = match_count
