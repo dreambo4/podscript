@@ -621,8 +621,6 @@ dialog button.primary { background: var(--accent); border-color: var(--accent); 
 
   .sidebar.open { transform: none; }
   #content { padding: 16px; }
-  /* 窄螢幕保留圖示當識別，只收起文字 */
-  .topbar h1 .brand-name { display: none; }
 
   .block-head { align-items: flex-start; }
 
