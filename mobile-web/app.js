@@ -334,6 +334,7 @@ function groupByYearMonth(episodes, sortField) {
 // 多於一個年月分組才啟用。
 const SCRUBBER_HIDE_DELAY = 1500;
 const SCRUBBER_YEAR_MIN_GAP = 26; // 年份標籤間距小於此值（px）時略過，避免互相重疊
+const SCRUBBER_RELEASE_MAX_JUMP = 40; // 放開時補上最後一筆座標的最大允許差距（px）
 const SCRUBBER_HEADING_ROOM = 48; // 判斷線在畫面底部時保留的高度，讓該組標題仍在畫面內
 
 const scrubber = {
@@ -466,10 +467,11 @@ function bindScrubberDrag() {
   el.dataset.bound = "1";
 
   const thumb = el.querySelector(".scrubber-thumb");
-  // 拖曳位移以 screenY 計算：iOS Safari 在程式捲動頁面時回報的 clientY 會跟著捲動偏移，
-  // screenY 不受頁面捲動影響
+  // 拖曳位移 = 手指 screenY 相對按下點的位移，取最近三筆的中位數，
+  // 濾掉 iOS Safari 在頁面捲動中偶發的單筆離群座標
   let startScreenY = 0;
   let startThumbY = 0; // 按下時把手在軌道內的位置
+  let recentY = [];
   let pendingScrollY = null;
 
   window.addEventListener("scroll", () => {
@@ -492,6 +494,10 @@ function bindScrubberDrag() {
     scrubber.dragging = true;
     scrubber.geo = measureScrubberGeo();
     startScreenY = e.screenY;
+    recentY = [e.screenY];
+    appliedY = e.screenY;
+    // 拖曳期間擋掉頁面的原生手勢捲動（程式呼叫 scrollTo 不受影響）
+    document.documentElement.classList.add("scrubbing");
     startThumbY = thumb.getBoundingClientRect().top - el.getBoundingClientRect().top;
     cacheScrubberSections();
     renderScrubberYears(scrubber.geo);
@@ -500,10 +506,12 @@ function bindScrubberDrag() {
     clearTimeout(scrubber.hideTimer);
   });
 
-  thumb.addEventListener("pointermove", (e) => {
-    if (!scrubber.dragging) return;
+  let appliedY = 0;
+
+  function applyFingerY(fingerY) {
     const geo = scrubber.geo;
-    const ratio = geo.track > 0 ? Math.min(1, Math.max(0, (startThumbY + e.screenY - startScreenY) / geo.track)) : 0;
+    appliedY = fingerY;
+    const ratio = geo.track > 0 ? Math.min(1, Math.max(0, (startThumbY + fingerY - startScreenY) / geo.track)) : 0;
     const scrollY = geo.start + ratio * (geo.end - geo.start);
     setScrubberThumb(ratio, geo);
     updateScrubberBubble(scrollY, geo);
@@ -516,12 +524,22 @@ function bindScrubberDrag() {
       });
     }
     pendingScrollY = scrollY;
+  }
+
+  thumb.addEventListener("pointermove", (e) => {
+    if (!scrubber.dragging) return;
+    recentY = [...recentY.slice(-2), e.screenY];
+    applyFingerY([...recentY].sort((a, b) => a - b)[Math.floor(recentY.length / 2)]);
   });
 
   const endDrag = () => {
     if (!scrubber.dragging) return;
+    // 中位數會落後一筆，手指停下後不再有新事件；放開時補上最後一筆（差距過大視為離群值不採用）
+    const lastY = recentY[recentY.length - 1];
+    if (Math.abs(lastY - appliedY) < SCRUBBER_RELEASE_MAX_JUMP) applyFingerY(lastY);
     scrubber.dragging = false;
     scrubber.geo = null;
+    document.documentElement.classList.remove("scrubbing");
     el.classList.remove("dragging");
     showScrubberBriefly();
   };
