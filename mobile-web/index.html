@@ -36,7 +36,7 @@
 <meta name="twitter:description" content="Podcast 逐字稿工具：分角色逐字稿、摘要、心智圖">
 <meta name="twitter:image" content="icons/og-image.png">
 
-<link rel="stylesheet" href="style.css?v=339690b2d136">
+<link rel="stylesheet" href="style.css?v=c44efd25976b">
 <script src="config.js"></script>
 </head>
 <body>
@@ -279,6 +279,7 @@
 
     <div class="subpanel" id="sub-transcript">
       <div class="block">
+        <nav id="chapters" class="chapters" aria-label="章節" hidden></nav>
         <div id="transcript"></div>
       </div>
       <!-- 從搜尋結果進來時才顯示；放在逐字稿分頁內，切到摘要分頁時跟著隱藏 -->
@@ -357,7 +358,7 @@
   // markmap 從 CDN 載入，可能晚於詳情頁資料到達；通知 app.js 補畫。
   window.dispatchEvent(new Event("markmap-ready"));
 </script>
-<script src="app.js?v=b2f5714e459c"></script>
+<script src="app.js?v=bde43957e5d7"></script>
 <script src="https://accounts.google.com/gsi/client" async defer onload="initGoogleSignIn()"></script>
 </body>
 </html>

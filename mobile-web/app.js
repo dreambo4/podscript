@@ -921,8 +921,7 @@ function renderSourceLink(ep) {
 
 function renderTranscript(ep, query = "", options = {}) {
   const container = document.querySelector("#transcript");
-  const speakers = ep.speakers || {};
-  container.innerHTML = "";
+  renderChapters(ep);
   // 文章只有段落，沒有時間與說話者
   if (isArticle(ep)) {
     container.innerHTML = `<div class="article-text">${(ep.transcript || [])
@@ -930,23 +929,69 @@ function renderTranscript(ep, query = "", options = {}) {
       .join("")}</div>`;
     return;
   }
-  (ep.transcript || []).forEach(seg => {
+
+  const speakers = ep.speakers || {};
+  const chapters = ep.chapters || [];
+  // 章節的 start 等於某一段的 start（本機端已對齊），依此判斷章節從哪一段開始。
+  // 每章包成一個 section：標題 sticky 只在所屬 section 內固定，捲到下一章時被推走。
+  const chapterAt = new Map(chapters.map((c, i) => [c.start, i]));
+  const html = [];
+  (ep.transcript || []).forEach((seg, i) => {
+    const index = chapterAt.get(seg.start);
+    if (index !== undefined) {
+      if (i > 0) html.push("</section>");
+      html.push(`<section class="chapter" id="chapter-${index}">
+        <h4 class="chapter-title">
+          <span class="chapter-time">${formatTime(seg.start)}</span>
+          <span>${escapeHtml(chapters[index].title)}</span>
+        </h4>`);
+    } else if (i === 0 && chapters.length) {
+      html.push(`<section class="chapter">`);
+    }
+
     const name = speakers[seg.speaker] || seg.speaker;
-    const div = document.createElement("div");
-    div.className = "seg" + (seg.confidence < 0.6 ? " low" : "");
     // 只有 YouTube 集數的時間戳可點，開影片跳到該處。
     const youtube = youtubeTimeUrl(ep, seg.start);
     const time = youtube
-      ? `<a class="seg-time" href="${youtube}" target="_blank" rel="noopener noreferrer">${formatTime(seg.start)}</a>`
+      ? `<a class="seg-time" href="${escapeHtml(youtube)}" target="_blank" rel="noopener noreferrer">${formatTime(seg.start)}</a>`
       : `<span class="seg-time">${formatTime(seg.start)}</span>`;
-    div.innerHTML = `
+    html.push(`<div class="seg${seg.confidence < 0.6 ? " low" : ""}">
       <div class="seg-head">
         <span class="seg-speaker">${escapeHtml(name)}</span>
         ${time}
       </div>
       <p>${highlightHtml(seg.text, query, options)}</p>
-    `;
-    container.appendChild(div);
+    </div>`);
+  });
+  if (chapters.length) html.push("</section>");
+  container.innerHTML = html.join("");
+}
+
+/** 逐字稿上方的章節目錄；沒有章節時（含文章）不顯示。 */
+function renderChapters(ep) {
+  const el = document.querySelector("#chapters");
+  const chapters = ep.chapters || [];
+  el.hidden = !chapters.length;
+  if (el.hidden) {
+    el.innerHTML = "";
+    return;
+  }
+
+  el.innerHTML = `<details class="chapters-toc" open>
+    <summary>章節（${chapters.length}）</summary>
+    <ol>${chapters
+      .map((c, i) => `<li>
+        <span class="chapter-time">${formatTime(c.start)}</span>
+        <a href="#" data-chapter="${i}">${escapeHtml(c.title)}</a>
+      </li>`)
+      .join("")}</ol>
+  </details>`;
+
+  el.querySelectorAll("a[data-chapter]").forEach(a => {
+    a.addEventListener("click", e => {
+      e.preventDefault();
+      document.getElementById(`chapter-${a.dataset.chapter}`)?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
   });
 }
 

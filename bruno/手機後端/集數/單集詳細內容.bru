@@ -15,6 +15,8 @@ docs {
   文章的 transcript 每筆是一段正文（start／end 為 0、speaker 為空字串），前端顯示為「原文」。
   source_url：原始網址，前端僅在 https 開頭時顯示為連結；
   YouTube 集數另以此網址加上 t=<秒>s 做逐字稿時間戳跳轉。
+  chapters：章節目錄 [{"start": 秒數, "title": "..."}]，start 等於 transcript 中某一段的 start；
+  文章與尚未產生章節的集數為空陣列。標題以「業配：」開頭者為業配段落。
 }
 
 auth:bearer {
