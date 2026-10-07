@@ -244,7 +244,7 @@ def summarize(
     # 合併建議待使用者確認，確認前 hashtags 維持原始標籤，不自動合併。
     generated.hashtags_generated = list(generated.hashtags)
     generated.hashtag_merges = summary.find_hashtag_merges(
-        generated.hashtags, _upload.fetch_existing_hashtags()
+        generated.hashtags, _upload.fetch_existing_hashtags(exclude_guid=directory.name)
     )
 
     directory.mkdir(parents=True, exist_ok=True)

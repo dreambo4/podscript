@@ -411,8 +411,12 @@ def uploaded_times(episode_guids: list[str]) -> dict[str, str]:
     return {guid: updated.isoformat() for guid, updated in rows}
 
 
-def fetch_existing_hashtags() -> list[str]:
-    """取得所有已上傳集數用過的標籤，供生成新標籤時比對是否同義。
+def fetch_existing_hashtags(exclude_guid: str | None = None) -> list[str]:
+    """取得已上傳集數用過的標籤，供生成新標籤時比對是否同義。
+
+    Args:
+        exclude_guid: 排除這一集自己的標籤。重新生成已上傳的單集時，
+            不應拿它自己舊的標籤來比對；其他集也用到的標籤仍會從那些集取得。
 
     查詢失敗或未設定 DATABASE_URL 時回傳空列表，呼叫端應視同「無標籤庫可比對」，
     不可讓標籤收斂的失敗擋住摘要生成。
@@ -426,7 +430,8 @@ def fetch_existing_hashtags() -> list[str]:
             with conn.cursor() as cur:
                 cur.execute(
                     "select distinct unnest(hashtags) from episodes"
-                    " where hashtags is not null"
+                    " where hashtags is not null and episode_guid is distinct from %s",
+                    (exclude_guid,),
                 )
                 rows = cur.fetchall()
     except psycopg.Error:
