@@ -546,9 +546,9 @@ const chapterScrubber = createScrubber({
   el: document.querySelector("#chapter-scrubber"),
   sectionSelector: "#transcript .chapter[id]",
   bubbleLabel: section => section.querySelector(".chapter-title > span:last-child")?.textContent ?? "",
-  // Podcast 顯示章節開始時間；文章沒有時間，顯示章節序號
+  // Podcast 顯示章節開始時間；文章沒有時間，顯示章節標題
   trackLabel: section => section.querySelector(".chapter-time")?.textContent
-    ?? `第 ${Number(section.id.replace("chapter-", "")) + 1} 章`,
+    ?? section.querySelector(".chapter-title > span:last-child")?.textContent ?? null,
   stickyOffset: () => topbarBottom() + (document.querySelector("#detail-view .subtabbar")?.offsetHeight ?? 0),
   movingSelector: "#detail-view > .detail-hero, #detail-view > .subtabbar, #sub-transcript > .block",
 });

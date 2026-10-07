@@ -585,6 +585,10 @@ body {
   color: var(--ink);
   font-size: 12px;
   white-space: nowrap;
+  /* 文章的刻度是章節標題，過長時截斷 */
+  max-width: 45vw;
+  overflow: hidden;
+  text-overflow: ellipsis;
   border: 1px solid var(--line);
   box-shadow: 0 1px 6px rgba(0, 0, 0, .12);
 }
