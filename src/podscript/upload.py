@@ -29,11 +29,11 @@ UPSERT_SQL = """
 insert into episodes (
     platform, source_url, episode_guid, podcast_name, title,
     published_at, duration_sec, summary, mindmap_mermaid, hashtags,
-    transcript, speakers, provenance, transcript_text
+    transcript, speakers, provenance, transcript_text, chapters
 ) values (
     %(platform)s, %(source_url)s, %(episode_guid)s, %(podcast_name)s, %(title)s,
     %(published_at)s, %(duration_sec)s, %(summary)s, %(mindmap_mermaid)s, %(hashtags)s,
-    %(transcript)s, %(speakers)s, %(provenance)s, %(transcript_text)s
+    %(transcript)s, %(speakers)s, %(provenance)s, %(transcript_text)s, %(chapters)s
 )
 on conflict (episode_guid) do update set
     source_url      = excluded.source_url,
@@ -48,6 +48,7 @@ on conflict (episode_guid) do update set
     speakers        = excluded.speakers,
     provenance      = excluded.provenance,
     transcript_text = excluded.transcript_text,
+    chapters        = excluded.chapters,
     updated_at      = now()
 returning id, (xmax = 0) as inserted
 """
@@ -199,13 +200,14 @@ def build_payload(directory: Path) -> dict:
         "transcript_text": ("\n" if pipeline.is_article(episode) else "").join(
             seg.text for seg in result.segments
         ),
+        "chapters": json.dumps(summary.get("chapters") or [], ensure_ascii=False),
     }
 
 
 FETCH_COLUMNS = """
     platform, source_url, episode_guid, podcast_name, title,
     published_at, duration_sec, summary, mindmap_mermaid, hashtags,
-    transcript, speakers, provenance, updated_at, created_at
+    transcript, speakers, provenance, chapters, updated_at, created_at
 """
 
 
@@ -257,7 +259,7 @@ def fetch_all() -> list[tuple[pipeline.Result, dict, str, str]]:
     items = []
     for row in rows:
         result, summary = _row_to_result(row)
-        items.append((result, summary, _iso(row[13]), _iso(row[14])))
+        items.append((result, summary, _iso(row[14]), _iso(row[15])))
     return items
 
 
@@ -270,7 +272,7 @@ def _row_to_result(row: tuple) -> tuple[pipeline.Result, dict]:
     (
         platform, source_url, episode_guid, podcast_name, title,
         published_at, duration_sec, summary, mindmap, hashtags,
-        transcript, speakers, provenance, *_timestamps,
+        transcript, speakers, provenance, chapters, *_timestamps,
     ) = row
 
     episode = Episode(
@@ -295,6 +297,7 @@ def _row_to_result(row: tuple) -> tuple[pipeline.Result, dict]:
         "summary": summary,
         "mindmap": mindmap,
         "hashtags": list(hashtags or []),
+        "chapters": _as_json(chapters, []),
     }
 
 
@@ -317,6 +320,7 @@ def update_episode(
     speakers: dict[str, str] | None = None,
     summary: dict | None = None,
     transcript_text: str | None = None,
+    chapters: list[dict] | None = None,
 ) -> None:
     """更新已上傳單集的指定欄位。
 
@@ -337,6 +341,9 @@ def update_episode(
     if transcript_text is not None:
         sets.append("transcript_text = %(transcript_text)s")
         params["transcript_text"] = transcript_text
+    if chapters is not None:
+        sets.append("chapters = %(chapters)s")
+        params["chapters"] = json.dumps(chapters, ensure_ascii=False)
     if summary is not None:
         sets += [
             "summary = %(summary)s",

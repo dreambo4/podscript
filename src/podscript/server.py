@@ -24,6 +24,7 @@ from pydantic import BaseModel
 
 from . import audio, notify, pipeline, upload
 from .resolvers import ResolveError, article, is_media_url, resolve
+from .summary import SummaryError
 
 # 模型、摘要與資料庫設定皆來自 .env，須在建立 app 前載入。
 load_dotenv(Path(__file__).resolve().parents[2] / ".env")
@@ -522,6 +523,32 @@ def regenerate(guid: str) -> dict:
     if generated is None:
         raise HTTPException(status_code=502, detail="摘要生成失敗，請稍後再試")
     return generated.to_dict()
+
+
+@app.post("/api/episodes/{guid}/chapters")
+def add_chapters(guid: str) -> dict:
+    """只產生章節，摘要、心智圖與標籤不變。供已有摘要的舊集數補上章節。
+
+    本機有摘要檔時寫入摘要檔；已上傳的單集同時寫回資料庫，
+    與說話者改名相同，不需再按「再次上傳」。
+    """
+    result, summary_data, _from_db = _load_episode(guid)
+    if pipeline.is_article(result.episode):
+        raise HTTPException(status_code=400, detail="文章不分章節")
+    if not summary_data.get("summary"):
+        raise HTTPException(status_code=400, detail="請先產生摘要")
+
+    try:
+        chapters = pipeline.add_chapters(_episode_dir(guid), result)
+    except SummaryError as exc:
+        raise HTTPException(status_code=502, detail=f"章節生成失敗：{exc}") from exc
+
+    if upload.uploaded_at(guid):
+        try:
+            upload.update_episode(guid, chapters=chapters)
+        except upload.UploadError as exc:
+            raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return {"chapters": chapters}
 
 
 @app.put("/api/episodes/{guid}/hashtags")

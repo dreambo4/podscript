@@ -393,6 +393,7 @@ function renderKnownSpeakers(names) {
 }
 
 function renderTranscript(data) {
+  renderChapters(data);
   if (isArticle(data.episode)) {
     $("transcript").innerHTML = `<div class="article-text">${data.segments
       .map((s) => `<p>${escapeHtml(s.text)}</p>`)
@@ -400,27 +401,81 @@ function renderTranscript(data) {
     return;
   }
 
-  $("transcript").innerHTML = data.segments
-    .map((s) => {
-      const name = data.speakers[s.speaker] || s.speaker;
-      const low = s.confidence < 0.6 ? " low" : "";
-      // YouTube 集數的時間戳直接開影片跳到該處；其他平台維持回聽本機音檔。
-      const youtube = youtubeTimeUrl(data.episode, s.start);
-      const time = youtube
-        ? `<a class="seg-time" href="${escapeHtml(youtube)}" target="_blank" rel="noopener noreferrer" title="在 YouTube 從這裡播放">${formatTime(s.start)}</a>`
-        : `<span class="seg-time" data-at="${s.start}">${formatTime(s.start)}</span>`;
-      return `<div class="seg${low}">
-        <div class="seg-head">
-          ${time}
-          <span class="seg-speaker">${escapeHtml(name)}</span>
-        </div>
-        <p>${escapeHtml(s.text)}</p>
-      </div>`;
-    })
-    .join("");
+  const chapters = data.summary?.chapters || [];
+  // 章節的 start 等於某一段的 start（後端已對齊），依此判斷章節從哪一段開始。
+  // 每章包成一個 section：標題 sticky 只在所屬 section 內固定，捲到下一章時被推走。
+  const chapterAt = new Map(chapters.map((c, i) => [c.start, i]));
+  const html = [];
+  data.segments.forEach((s, i) => {
+    const index = chapterAt.get(s.start);
+    if (index !== undefined) {
+      if (i > 0) html.push("</section>");
+      html.push(`<section class="chapter" id="chapter-${index}">
+        <h4 class="chapter-title">
+          <span class="chapter-time">${formatTime(s.start)}</span>
+          <span>${escapeHtml(chapters[index].title)}</span>
+        </h4>`);
+    } else if (i === 0 && chapters.length) {
+      html.push(`<section class="chapter">`);
+    }
+    html.push(segmentHtml(data, s));
+  });
+  if (chapters.length) html.push("</section>");
+  $("transcript").innerHTML = html.join("");
 
   $("transcript").querySelectorAll("span.seg-time").forEach((el) => {
     el.addEventListener("click", () => playAt(Number(el.dataset.at)));
+  });
+}
+
+function segmentHtml(data, s) {
+  const name = data.speakers[s.speaker] || s.speaker;
+  const low = s.confidence < 0.6 ? " low" : "";
+  // YouTube 集數的時間戳直接開影片跳到該處；其他平台維持回聽本機音檔。
+  const youtube = youtubeTimeUrl(data.episode, s.start);
+  const time = youtube
+    ? `<a class="seg-time" href="${escapeHtml(youtube)}" target="_blank" rel="noopener noreferrer" title="在 YouTube 從這裡播放">${formatTime(s.start)}</a>`
+    : `<span class="seg-time" data-at="${s.start}">${formatTime(s.start)}</span>`;
+  return `<div class="seg${low}">
+    <div class="seg-head">
+      ${time}
+      <span class="seg-speaker">${escapeHtml(name)}</span>
+    </div>
+    <p>${escapeHtml(s.text)}</p>
+  </div>`;
+}
+
+// ── 章節 ────────────────────────────────────────────
+
+/** 逐字稿上方的章節目錄；沒有章節時（含文章）不顯示。 */
+function renderChapters(data) {
+  const el = $("chapters");
+  const chapters = data.summary?.chapters || [];
+  el.hidden = !chapters.length;
+  if (el.hidden) return;
+
+  el.innerHTML = `<details class="chapters-toc" open>
+    <summary>章節（${chapters.length}）</summary>
+    <ol>${chapters
+      .map((c, i) => {
+        const youtube = youtubeTimeUrl(data.episode, c.start);
+        const play = youtube
+          ? `<a class="chapter-play" href="${escapeHtml(youtube)}" target="_blank" rel="noopener noreferrer">YouTube ↗</a>`
+          : "";
+        return `<li>
+          <span class="chapter-time">${formatTime(c.start)}</span>
+          <a href="#" data-chapter="${i}">${escapeHtml(c.title)}</a>
+          ${play}
+        </li>`;
+      })
+      .join("")}</ol>
+  </details>`;
+
+  el.querySelectorAll("a[data-chapter]").forEach((a) => {
+    a.addEventListener("click", (e) => {
+      e.preventDefault();
+      $(`chapter-${a.dataset.chapter}`)?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
   });
 }
 
@@ -478,6 +533,7 @@ $("btn-regen").addEventListener("click", async (e) => {
     });
     current.summary = summary;
     renderSummary(summary);
+    renderTranscript(current);
     renderUploadState();
   } catch (err) {
     alert(err.message);
@@ -600,7 +656,9 @@ function downloadMarkdown(parts) {
     for (const s of d.segments) lines.push(s.text, "");
   } else if (parts.includes("transcript")) {
     lines.push("## 逐字稿", "");
+    const chapterAt = new Map((d.summary?.chapters || []).map((c) => [c.start, c.title]));
     for (const s of d.segments) {
+      if (chapterAt.has(s.start)) lines.push(`### ${chapterAt.get(s.start)}`, "");
       const name = d.speakers[s.speaker] || s.speaker;
       lines.push(`**[${formatTime(s.start)}] ${name}**`, "", s.text, "");
     }

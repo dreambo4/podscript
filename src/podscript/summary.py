@@ -1,6 +1,6 @@
-"""摘要、心智圖與標籤生成。
+"""摘要、心智圖、標籤與章節生成。
 
-三項由同一次呼叫產生：逐字稿約 3 萬 token，分開呼叫會重複送入，
+四項由同一次呼叫產生（文章不分章節）：逐字稿約 3 萬 token，分開呼叫會重複送入，
 合併為一次是最省額度的做法。
 
 以 SummaryProvider 抽象兩種後端：本機 claude CLI 與未來的 Anthropic API，
@@ -15,21 +15,34 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from pathlib import Path
 
+# 章節規則，摘要 prompt 與只補章節的 prompt 共用。
+CHAPTER_RULES = """chapters 規則：
+- 依話題轉換切分章節，約每 8 到 12 分鐘一章，至少 3 章、最多 15 章
+- start 為該章第一段的時間戳，照抄逐字稿上 [ ] 內的時間，不可自行推算
+- 第一章從逐字稿開頭開始，之後依時間先後排列
+- title 為 6 到 16 字的繁體中文，寫出該章實際討論的內容，不用「第一章」「開場白」這類空泛名稱
+- 逐字稿中若有業配、廣告、贊助商介紹、節目自身的商品推銷等段落，即使很短也要獨立成一章，
+  title 以「業配：」開頭並寫出品牌或商品，例如「業配：Hostinger 架站工具」
+- 沒有這類段落就不要產生業配章節；只是提到品牌或產品的一般討論不算業配，不可用「業配：」開頭"""
+
 PROMPT = """請讀取 {path}，這是一集 Podcast 的逐字稿。
 
-產生以下三項，並以 JSON 格式輸出：
+產生以下四項，並以 JSON 格式輸出：
 
 1. summary：約 100 字的繁體中文摘要，須涵蓋整集重點，不可只寫開頭幾段的內容
 2. mindmap：Mermaid mindmap 語法的架構心智圖，反映節目實際的討論脈絡
 3. hashtags：5 個主題標籤，用於搜尋與分類
+4. chapters：章節目錄，供使用者跳到想聽的段落
 
 hashtags 規則：
 - 不得使用人名（主持人、來賓、第三人皆不可）
 - 以主題、領域、概念為準，例如 房地產、談判技巧、投資理財
 - 不含 # 符號，每個標籤 2-6 字
 
+""" + CHAPTER_RULES + """
+
 輸出格式（只輸出 JSON，不要任何說明文字）：
-{{"summary": "...", "mindmap": "mindmap\\n  root((主題))\\n    分支一\\n      細項", "hashtags": ["標籤一", "標籤二", "標籤三", "標籤四", "標籤五"]}}
+{{"summary": "...", "mindmap": "mindmap\\n  root((主題))\\n    分支一\\n      細項", "hashtags": ["標籤一", "標籤二", "標籤三", "標籤四", "標籤五"], "chapters": [{{"start": "00:00", "title": "..."}}, {{"start": "12:30", "title": "..."}}]}}
 
 注意：
 - 逐字稿無標點符號，請依語意自行斷句理解
@@ -56,6 +69,20 @@ hashtags 規則：
 - 全文由網頁自動擷取，結尾可能夾雜相關新聞標題、發布時間列表、「繼續閱讀」等網站雜訊，請忽略
 - 原文以外的資訊不要寫進摘要與心智圖
 - mindmap 須為可直接渲染的合法 Mermaid 語法，階層以縮排表示"""
+
+# 已有摘要的集數只補章節時使用，不重產摘要、心智圖與標籤。
+CHAPTERS_PROMPT = """請讀取 {path}，這是一集 Podcast 的逐字稿。
+
+產生章節目錄，供使用者跳到想聽的段落，並以 JSON 格式輸出。
+
+""" + CHAPTER_RULES + """
+
+輸出格式（只輸出 JSON，不要任何說明文字）：
+{{"chapters": [{{"start": "00:00", "title": "..."}}, {{"start": "12:30", "title": "..."}}]}}
+
+注意：
+- 逐字稿無標點符號，請依語意自行斷句理解
+- SPEAKER_00 與 SPEAKER_01 是不同說話者"""
 
 # 依內容類型選用的提示；鍵對應 pipeline 的 content_kind。
 PROMPTS = {"podcast": PROMPT, "article": ARTICLE_PROMPT}
@@ -100,12 +127,15 @@ class Summary:
     hashtag_merges: list[dict] = field(default_factory=list)
     # 合併前的原始標籤，供使用者改變決定時重新計算 hashtags。
     hashtags_generated: list[str] = field(default_factory=list)
+    # 模型回傳的原始章節；由 pipeline 依段落時間檢查與對齊後覆寫，見 chapters.normalize。
+    chapters: list = field(default_factory=list)
 
     def to_dict(self) -> dict:
         return {
             "summary": self.summary,
             "mindmap": self.mindmap,
             "hashtags": self.hashtags,
+            "chapters": self.chapters,
             "hashtag_merges": self.hashtag_merges,
             "hashtags_generated": self.hashtags_generated,
             "model": self.model,
@@ -133,6 +163,17 @@ class SummaryProvider(ABC):
             SummaryError: 生成失敗或回傳格式無法解析。
         """
 
+    @abstractmethod
+    def generate_chapters(self, transcript_path: Path, *, model: str) -> list:
+        """只產生章節，供已有摘要的集數補上。
+
+        Returns:
+            模型回傳的原始章節，尚未檢查與對齊。
+
+        Raises:
+            SummaryError: 生成失敗或回傳格式無法解析。
+        """
+
 
 class ClaudeCliProvider(SummaryProvider):
     """透過本機 claude CLI 生成，消耗訂閱額度。"""
@@ -145,14 +186,31 @@ class ClaudeCliProvider(SummaryProvider):
     ) -> Summary:
         if not transcript_path.exists():
             raise SummaryError(f"找不到逐字稿 {transcript_path}")
+        stdout = self._run(PROMPTS[kind].format(path=transcript_path), model=model)
+        return _parse_cli_output(stdout, model=model)
 
+    def generate_chapters(self, transcript_path: Path, *, model: str = "sonnet") -> list:
+        if not transcript_path.exists():
+            raise SummaryError(f"找不到逐字稿 {transcript_path}")
+        stdout = self._run(CHAPTERS_PROMPT.format(path=transcript_path), model=model)
+        try:
+            envelope = json.loads(stdout)
+        except json.JSONDecodeError as exc:
+            raise SummaryError(f"CLI 輸出非 JSON：{stdout[:200]}") from exc
+        chapters = _extract_json(envelope.get("result", "")).get("chapters")
+        if not isinstance(chapters, list):
+            raise SummaryError("回傳缺少 chapters")
+        return chapters
+
+    def _run(self, prompt: str, *, model: str) -> str:
+        """執行 claude CLI，回傳原始輸出。"""
         # 逐字稿以檔案傳遞，不放進命令列參數：2-3 萬字會超過 ARG_MAX。
         try:
             proc = subprocess.run(
                 [
                     "claude",
                     "-p",
-                    PROMPTS[kind].format(path=transcript_path),
+                    prompt,
                     "--model",
                     model,
                     "--output-format",
@@ -170,8 +228,7 @@ class ClaudeCliProvider(SummaryProvider):
 
         if proc.returncode != 0:
             raise SummaryError(f"claude 生成失敗：{proc.stderr.strip()[:300]}")
-
-        return _parse_cli_output(proc.stdout, model=model)
+        return proc.stdout
 
 
 def _parse_cli_output(stdout: str, *, model: str) -> Summary:
@@ -197,6 +254,8 @@ def _parse_cli_output(stdout: str, *, model: str) -> Summary:
         summary=summary,
         mindmap=mindmap,
         hashtags=_clean_hashtags(payload.get("hashtags")),
+        # 章節有問題不影響摘要，格式檢查留給 chapters.normalize 逐章過濾。
+        chapters=payload.get("chapters") if isinstance(payload.get("chapters"), list) else [],
         model=_resolve_model_id(envelope, fallback=model),
         usage=envelope.get("usage", {}),
     )

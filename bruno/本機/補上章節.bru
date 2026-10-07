@@ -1,0 +1,18 @@
+meta {
+  name: 補上章節
+  type: http
+  seq: 16
+}
+
+post {
+  url: {{localBase}}/api/episodes/{{guid}}/chapters
+  body: none
+  auth: none
+}
+
+docs {
+  只產生章節，摘要、心智圖與標籤不變；會再送一次整份逐字稿給 claude -p。
+  回應：{"chapters": [{"start": 秒數, "title": "..."}]}，start 等於 segments 中某一段的 start。
+  本機有摘要檔時寫入摘要檔；已上傳的單集同時寫回資料庫 episodes.chapters，不需再次上傳。
+  文章或尚未產生摘要回 400；模型回傳的章節全部不合格回 502。
+}

@@ -504,6 +504,53 @@ a.seg-time:hover { color: var(--accent); text-decoration: underline; }
 .seg.low p { color: var(--muted); }
 .seg.low .seg-head::after { content: "低信心"; color: var(--warn); }
 
+/* 章節目錄與逐字稿內的章節標題 */
+.chapters { margin-bottom: 20px; }
+
+.chapters-toc {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 10px 14px;
+}
+.chapters-toc summary { cursor: pointer; font-size: 14px; font-weight: 600; }
+.chapters-toc ol { list-style: none; margin: 8px 0 0; padding: 0; }
+.chapters-toc li {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 3px 0;
+  font-size: 14px;
+}
+.chapters-toc a { color: var(--ink); text-decoration: none; }
+.chapters-toc a:hover { color: var(--accent); text-decoration: underline; }
+.chapters-toc .chapter-play { margin-left: auto; color: var(--muted); font-size: 12px; white-space: nowrap; }
+
+.chapter-time {
+  flex: none;
+  min-width: 4.5em;
+  color: var(--muted);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* 標題 sticky 只在所屬 .chapter 範圍內固定，捲到下一章時被下一章標題推走；
+   scroll-margin 讓點目錄跳轉時不被頂部列蓋住。 */
+.chapter { scroll-margin-top: var(--topbar-h); }
+.chapter-title {
+  position: sticky;
+  top: var(--topbar-h);
+  z-index: 1;
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin: 0 0 12px;
+  padding: 10px 0 8px;
+  border-bottom: 1px solid var(--line);
+  background: var(--card);
+  font-size: 15px;
+}
+.chapter + .chapter .chapter-title { margin-top: 12px; }
+
 .speakers { display: flex; gap: 8px; flex-wrap: wrap; }
 .speakers input {
   width: 8em;
@@ -641,5 +688,6 @@ dialog button.primary { background: var(--accent); border-color: var(--accent); 
   #content { padding: 0; }
   .card { border: 0; padding: 0; max-width: none; }
   .seg { break-inside: avoid; }
+  .chapter-title { position: static; }
   #mindmap svg { min-width: 0; max-width: 100%; }
 }

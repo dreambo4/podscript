@@ -14,7 +14,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable
 
-from . import audio, diarize, postprocess, summary, transcribe
+from . import audio, chapters, diarize, postprocess, summary, transcribe
 from . import resolvers
 from .resolvers import Episode, resolve
 from .resolvers.article import PLATFORM as ARTICLE_PLATFORM, Article
@@ -204,9 +204,9 @@ def summarize(
     force: bool = False,
     summary_model: str | None = None,
 ) -> summary.Summary | None:
-    """產生摘要、心智圖與標籤。
+    """產生摘要、心智圖、標籤與章節。
 
-    三項由同一次呼叫產生（見 summary 模組）。已有結果且未指定 force 時沿用，
+    四項由同一次呼叫產生（見 summary 模組）；章節依段落時間檢查與對齊後才寫入。已有結果且未指定 force 時沿用，
     供「重新生成」按鈕在不重跑轉錄的情況下單獨呼叫。
 
     失敗時回傳 None 並保留既有逐字稿：摘要是附加價值，
@@ -234,6 +234,10 @@ def summarize(
         except summary.SummaryError:
             return None
 
+    generated.chapters = _normalize_chapters(
+        generated.chapters, result or load_result(directory)
+    )
+
     # 延遲匯入避免與 upload 模組的循環參照（upload 匯入 pipeline 取得 Result）。
     from . import upload as _upload
 
@@ -254,6 +258,50 @@ def summarize(
         result.provenance.generated_at = datetime.now(timezone.utc).isoformat()
         _write_outputs(directory, result)
     return generated
+
+
+def add_chapters(
+    directory: Path, result: Result, *, summary_model: str | None = None
+) -> list[dict]:
+    """只產生章節，不動摘要、心智圖與標籤。供已有摘要的舊集數補上章節。
+
+    本機有 result.json 時一併寫入；已上傳者由呼叫端寫回資料庫。
+
+    Returns:
+        檢查與對齊後的章節，見 chapters.normalize。
+
+    Raises:
+        summary.SummaryError: 生成失敗，或模型回傳的章節全部不合格。
+    """
+    with _summary_transcript(directory, result) as transcript:
+        model = summary_model or os.environ.get("CLAUDE_CLI_MODEL", "opus")
+        provider = summary.get_provider(
+            os.environ.get("SUMMARY_PROVIDER", "claude_cli")
+        )
+        raw = provider.generate_chapters(transcript, model=model)
+
+    normalized = _normalize_chapters(raw, result)
+    if not normalized:
+        raise summary.SummaryError("模型回傳的章節格式不正確，請再試一次")
+
+    data = load_summary(directory)
+    if data is not None:
+        data["chapters"] = normalized
+        (directory / "result.json").write_text(
+            json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8"
+        )
+    return normalized
+
+
+def _normalize_chapters(raw: list, result: Result | None) -> list[dict]:
+    """依段落時間檢查與對齊章節；文章不分章節。"""
+    if result is None or is_article(result.episode):
+        return []
+    return chapters.normalize(
+        raw,
+        [seg.start for seg in result.segments],
+        duration=result.episode.duration_sec,
+    )
 
 
 @contextmanager

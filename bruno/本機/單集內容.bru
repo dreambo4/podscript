@@ -16,4 +16,6 @@ docs {
   不含 SPEAKER_00 這類預設編號。未設定 DATABASE_URL 或查詢失敗時只含本機結果。
   文章（episode.platform = article）：segments 每筆是一段正文（start／end 為 0、speaker 為空字串），
   speakers 與 known_speakers 皆為空。
+  summary.chapters 為章節目錄 [{"start": 秒數, "title": "..."}]，start 等於 segments 中某一段的 start；
+  文章與尚未補章節的舊集數為空陣列。
 }
