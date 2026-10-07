@@ -1,0 +1,17 @@
+meta {
+  name: 放棄重新生成
+  type: http
+  seq: 18
+}
+
+delete {
+  url: {{localBase}}/api/episodes/{{guid}}/regenerated
+  body: none
+  auth: none
+}
+
+docs {
+  放棄已上傳單集重新生成的內容：清除本機目錄（摘要、心智圖、標籤、章節、封面等），回到資料庫中已上傳的版本。
+  只允許 needs_reupload 為 true 的單集（已上傳且本機有 result.json），否則回 400；處理中的單集回 409。
+  回應：{"freed_bytes": 釋出的位元組數}。
+}

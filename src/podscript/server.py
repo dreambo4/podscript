@@ -367,6 +367,9 @@ def list_episodes() -> list[dict]:
         item.setdefault("uploaded_at", None)
         if not item["uploaded_at"]:
             item["uploaded_at"] = times.get(item["guid"])
+        item["needs_reupload"] = bool(
+            item["uploaded_at"] and item.get("has_local_summary") and not item["processing"]
+        )
 
     # 依加入本工具的時間排序（非節目發布時間），新加入的在前。
     items.sort(key=lambda e: e.get("created_at") or "", reverse=True)
@@ -405,6 +408,8 @@ def _episode_summary(
         "ready": result is not None,
         "processing": bool(job and not job.done),
         "has_audio": bool(directory and (directory / "source.mp3").exists()),
+        # 上傳後本機目錄會清除；已上傳又出現本機摘要檔，表示重新生成過、尚未再次上傳
+        "has_local_summary": bool(directory and (directory / "result.json").exists()),
         "stage": job.stage if job else "",
         "message": job.message if job else "",
         "error": job.error if job else "",
@@ -447,6 +452,7 @@ def get_episode(guid: str) -> dict:
         "uploaded_at": upload.uploaded_at(guid),
         "has_audio": (directory / "source.mp3").exists(),
         "from_db": from_db,
+        "needs_reupload": _needs_reupload(guid),
         "known_speakers": []
         if pipeline.is_article(result.episode)
         else _known_speakers(result.episode.podcast_name),
@@ -588,6 +594,31 @@ def decide_hashtags(guid: str, req: HashtagDecisionRequest) -> dict:
     except FileNotFoundError as exc:
         raise HTTPException(status_code=404, detail="這集沒有待確認的標籤") from exc
     except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+def _needs_reupload(guid: str) -> bool:
+    """已上傳、但本機有重新生成的摘要尚未再次上傳。
+
+    上傳成功會清除整個本機目錄，之後只有重新生成會在本機寫出 result.json。
+    """
+    return (_episode_dir(guid) / "result.json").exists() and bool(upload.uploaded_at(guid))
+
+
+@app.delete("/api/episodes/{guid}/regenerated")
+def discard_regenerated(guid: str) -> dict:
+    """放棄重新生成的內容：清除本機檔案，回到資料庫中已上傳的版本。
+
+    只允許已上傳且本機有摘要檔的單集，避免誤刪尚未上傳的成果。
+    """
+    job = _read_job(guid)
+    if job is not None and not job.done:
+        raise HTTPException(status_code=409, detail="這集正在處理中，請等處理結束再放棄")
+    if not _needs_reupload(guid):
+        raise HTTPException(status_code=400, detail="這集沒有待重新上傳的內容")
+    try:
+        return upload.discard_audio(_episode_dir(guid))
+    except upload.UploadError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 

@@ -266,6 +266,16 @@ button:disabled { opacity: .5; cursor: default; }
 .actions { display: flex; gap: 8px; }
 .actions button.danger { color: #a33; }
 
+/* 「放棄重新生成」＋「再次上傳」成組：相連的按鈕，再次上傳為主要動作 */
+.btn-group { display: inline-flex; }
+.btn-group[hidden] { display: none; }
+.btn-group.paired button { position: relative; border-radius: 0; }
+.btn-group.paired button:first-child { border-radius: 8px 0 0 8px; }
+.btn-group.paired button:last-child { border-radius: 0 8px 8px 0; margin-left: -1px; }
+.btn-group.paired button:hover:not(:disabled) { z-index: 1; }
+.btn-group.paired #btn-upload { background: var(--accent); border-color: var(--accent); color: #fff; }
+.btn-group.paired #btn-upload:hover:not(:disabled) { filter: brightness(1.1); color: #fff; }
+
 .block { padding: 20px 0; border-bottom: 1px solid var(--line); }
 .block:last-child { border-bottom: 0; padding-bottom: 0; }
 

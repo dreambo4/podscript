@@ -550,78 +550,129 @@ function playAt(seconds) {
   audioEl.play();
 }
 
+// ── 進行中的動作 ──────────────────────────────────────
+// 按鈕在各集之間共用，進行中的動作以「單集＋動作」記錄：
+// 切到別集時按鈕顯示該集自己的狀態，回應到達時只有仍在同一集才更新畫面。
+const BUSY_BUTTONS = {
+  regen: { id: "btn-regen", idle: "重新生成全部", busy: "生成中…" },
+  cover: { id: "btn-regen-cover", idle: "重新生成封面", busy: "生成中…" },
+  upload: { id: "btn-upload", busy: "上傳中…" },
+  discard: { id: "btn-discard-regen", idle: "放棄重新生成", busy: "處理中…" },
+};
+const busyActions = new Set();
+
+function isBusy(guid, action) {
+  return busyActions.has(`${guid}:${action}`);
+}
+
+function setBusy(guid, action, on) {
+  busyActions[on ? "add" : "delete"](`${guid}:${action}`);
+  if (current?.guid === guid) renderBusyButtons();
+}
+
+/** 依目前這集進行中的動作更新按鈕；上傳鈕的平時文字由 renderUploadState 決定。 */
+function renderBusyButtons() {
+  if (!current) return;
+  for (const [action, { id, idle, busy }] of Object.entries(BUSY_BUTTONS)) {
+    const btn = $(id);
+    const on = isBusy(current.guid, action);
+    if (on) btn.textContent = busy;
+    else if (idle) btn.textContent = idle;
+    btn.disabled = on || (action === "upload" && pendingMerges(current.summary).length > 0);
+  }
+}
+
 // ── 重新生成 ────────────────────────────────────────
 
-$("btn-regen").addEventListener("click", async (e) => {
-  const btn = e.target;
-  btn.disabled = true;
-  btn.textContent = "生成中…";
+$("btn-regen").addEventListener("click", async () => {
+  const guid = current.guid;
+  setBusy(guid, "regen", true);
   try {
-    const summary = await api(`/api/episodes/${current.guid}/regenerate`, {
-      method: "POST",
-    });
-    current.summary = summary;
-    renderSummary(summary);
-    renderTranscript(current);
-    renderUploadState();
+    const summary = await api(`/api/episodes/${guid}/regenerate`, { method: "POST" });
+    if (current?.guid === guid) {
+      current.summary = summary;
+      // 已上傳的單集重新生成後只存在本機，需再次上傳
+      current.needs_reupload = Boolean(current.uploaded_at);
+      renderSummary(summary);
+      renderTranscript(current);
+      renderUploadState();
+    }
+    loadLibrary();
   } catch (err) {
     alert(err.message);
   } finally {
-    btn.disabled = false;
-    btn.textContent = "重新生成全部";
+    setBusy(guid, "regen", false);
   }
 });
 
-$("btn-regen-cover").addEventListener("click", async (e) => {
-  const btn = e.target;
+$("btn-regen-cover").addEventListener("click", async () => {
   if (!current.summary?.summary) {
     alert("請先產生摘要");
     return;
   }
-  btn.disabled = true;
-  btn.textContent = "生成中…";
+  const guid = current.guid;
+  setBusy(guid, "cover", true);
   try {
-    const { cover } = await api(`/api/episodes/${current.guid}/cover`, { method: "POST" });
-    current.summary = { ...current.summary, cover };
-    renderCover(cover);
+    const { cover } = await api(`/api/episodes/${guid}/cover`, { method: "POST" });
+    if (current?.guid === guid) {
+      current.summary = { ...current.summary, cover };
+      renderCover(cover);
+    }
+    loadLibrary();
   } catch (err) {
     alert(err.message);
   } finally {
-    btn.disabled = false;
-    btn.textContent = "重新生成封面";
+    setBusy(guid, "cover", false);
   }
 });
 
 // ── 上傳 Supabase ───────────────────────────────────
 
-$("btn-upload").addEventListener("click", async (e) => {
-  const btn = e.target;
-  btn.disabled = true;
-  btn.textContent = "上傳中…";
+$("btn-upload").addEventListener("click", async () => {
+  const guid = current.guid;
+  setBusy(guid, "upload", true);
   try {
-    const res = await api(`/api/episodes/${current.guid}/upload`, {
-      method: "POST",
-    });
-    current.uploaded_at = new Date().toISOString();
-    current.has_audio = false; // 上傳成功後音檔已自動清除
-    renderUploadState();
+    const res = await api(`/api/episodes/${guid}/upload`, { method: "POST" });
     // 後端在上傳成功時把對應的待處理項目標記為完成，這裡刷新讓它消失
     await Promise.all([loadLibrary(), loadQueue()]);
+    setBusy(guid, "upload", false);
+    if (current?.guid !== guid) return;
 
-    const freed = res.freed_bytes
-      ? `，釋出 ${(res.freed_bytes / 1048576).toFixed(0)} MB`
-      : "";
+    current.uploaded_at = new Date().toISOString();
+    current.has_audio = false; // 上傳成功後音檔已自動清除
+    current.needs_reupload = false;
+    renderUploadState();
+    // 上傳後按鈕會隱藏，先短暫顯示結果
+    const freed = res.freed_bytes ? `，釋出 ${(res.freed_bytes / 1048576).toFixed(0)} MB` : "";
+    const btn = $("btn-upload");
+    $("upload-group").hidden = false;
+    btn.hidden = false;
+    btn.disabled = true;
     btn.textContent = `${res.inserted ? "已上傳" : "已更新"}${freed}`;
-    setTimeout(renderUploadState, 3000);
+    setTimeout(() => { if (current?.guid === guid) renderUploadState(); }, 3000);
   } catch (err) {
     alert(err.message);
-    renderUploadState();
-  } finally {
-    btn.disabled = pendingMerges(current?.summary).length > 0;
+    setBusy(guid, "upload", false);
+    if (current?.guid === guid) renderUploadState();
   }
 });
 
 // ── 刪除單集 ────────────────────────────────────────
+
+$("btn-discard-regen").addEventListener("click", async () => {
+  if (!confirm(`放棄「${current.episode.title}」重新生成的內容？\n本機的摘要、心智圖、標籤、章節與封面會刪除，回到已上傳的版本。\n此動作無法復原。`)) return;
+
+  const guid = current.guid;
+  setBusy(guid, "discard", true);
+  try {
+    await api(`/api/episodes/${guid}/regenerated`, { method: "DELETE" });
+    await Promise.all([current?.guid === guid ? showEpisode(guid) : null, loadLibrary()]);
+  } catch (err) {
+    alert(err.message);
+  } finally {
+    setBusy(guid, "discard", false);
+  }
+});
 
 $("btn-delete").addEventListener("click", async (e) => {
   const uploaded = Boolean(current.uploaded_at);
@@ -657,15 +708,21 @@ function renderUploadState() {
       : "",
     current.provenance?.transcribe_model,
     uploaded ? `已上傳 ${current.uploaded_at.slice(0, 10)}` : "尚未上傳",
+    current.needs_reupload ? "重新生成的內容尚未上傳" : "",
     current.has_audio === false && !isArticle(current.episode) ? "音檔已刪除" : "",
   ].filter(Boolean);
   $("ep-meta").textContent = meta.join(" · ");
   renderSourceLink(current.episode);
 
+  // 已上傳且沒有重新生成的內容時不需要上傳；「再次上傳」與「放棄重新生成」成組出現
+  $("btn-upload").hidden = uploaded && !current.needs_reupload;
   $("btn-upload").textContent = uploaded ? "再次上傳" : "上傳";
+  $("btn-discard-regen").hidden = !current.needs_reupload;
+  $("upload-group").classList.toggle("paired", Boolean(current.needs_reupload));
+  $("upload-group").hidden = $("btn-upload").hidden;
   const pending = pendingMerges(current.summary).length > 0;
-  $("btn-upload").disabled = pending;
   $("btn-upload").title = pending ? "標籤合併尚未確認" : "";
+  renderBusyButtons();
 }
 
 // ── 下載 ────────────────────────────────────────────
@@ -849,8 +906,10 @@ function renderLibrary() {
   const selected = location.hash.slice(1);
   const groups = [
     ["處理中", shown.filter((e) => e.processing)],
+    // 已上傳但本機有重新生成的內容，需再次上傳才會更新資料庫與手機端
+    ["待重新上傳", shown.filter((e) => !e.processing && e.needs_reupload)],
     ["未上傳", shown.filter((e) => !e.processing && !e.uploaded_at)],
-    ["已上傳", shown.filter((e) => !e.processing && e.uploaded_at)],
+    ["已上傳", shown.filter((e) => !e.processing && e.uploaded_at && !e.needs_reupload)],
   ];
 
   const html = groups
