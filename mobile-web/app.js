@@ -922,33 +922,33 @@ function renderSourceLink(ep) {
 function renderTranscript(ep, query = "", options = {}) {
   const container = document.querySelector("#transcript");
   renderChapters(ep);
-  // 文章只有段落，沒有時間與說話者
-  if (isArticle(ep)) {
-    container.innerHTML = `<div class="article-text">${(ep.transcript || [])
-      .map(seg => `<p>${highlightHtml(seg.text, query, options)}</p>`)
-      .join("")}</div>`;
-    return;
-  }
-
+  const article = isArticle(ep);
+  const segments = ep.transcript || [];
   const speakers = ep.speakers || {};
   const chapters = ep.chapters || [];
-  // 章節的 start 等於某一段的 start（本機端已對齊），依此判斷章節從哪一段開始。
+  const startsAt = chapterStarts(segments, chapters, article);
   // 每章包成一個 section：標題 sticky 只在所屬 section 內固定，捲到下一章時被推走。
-  const chapterAt = new Map(chapters.map((c, i) => [c.start, i]));
   const html = [];
-  (ep.transcript || []).forEach((seg, i) => {
-    const index = chapterAt.get(seg.start);
+  segments.forEach((seg, i) => {
+    const index = startsAt.get(i);
     if (index !== undefined) {
       if (i > 0) html.push("</section>");
+      // 文章章節以段落定位，沒有時間
+      const time = article ? "" : `<span class="chapter-time">${formatTime(seg.start)}</span>`;
       html.push(`<section class="chapter" id="chapter-${index}">
         <h4 class="chapter-title">
-          <span class="chapter-time">${formatTime(seg.start)}</span>
+          ${time}
           <span>${escapeHtml(chapters[index].title)}</span>
         </h4>`);
     } else if (i === 0 && chapters.length) {
       html.push(`<section class="chapter">`);
     }
 
+    // 文章只有段落，沒有時間與說話者
+    if (article) {
+      html.push(`<p>${highlightHtml(seg.text, query, options)}</p>`);
+      return;
+    }
     const name = speakers[seg.speaker] || seg.speaker;
     // 只有 YouTube 集數的時間戳可點，開影片跳到該處。
     const youtube = youtubeTimeUrl(ep, seg.start);
@@ -964,10 +964,23 @@ function renderTranscript(ep, query = "", options = {}) {
     </div>`);
   });
   if (chapters.length) html.push("</section>");
-  container.innerHTML = html.join("");
+  container.innerHTML = article ? `<div class="article-text">${html.join("")}</div>` : html.join("");
 }
 
-/** 逐字稿上方的章節目錄；沒有章節時（含文章）不顯示。 */
+/**
+ * 各章從第幾段開始：{段落索引: 章節索引}。
+ * 本機端已對齊，Podcast 章節的 start 等於某一段的 start；文章章節的 paragraph 即段落索引。
+ */
+function chapterStarts(segments, chapters, article) {
+  const bySegment = new Map();
+  chapters.forEach((c, i) => {
+    const seg = article ? c.paragraph : segments.findIndex(s => s.start === c.start);
+    if (seg >= 0 && !bySegment.has(seg)) bySegment.set(seg, i);
+  });
+  return bySegment;
+}
+
+/** 逐字稿上方的章節目錄；沒有章節時不顯示。 */
 function renderChapters(ep) {
   const el = document.querySelector("#chapters");
   const chapters = ep.chapters || [];
@@ -977,11 +990,12 @@ function renderChapters(ep) {
     return;
   }
 
+  const article = isArticle(ep);
   el.innerHTML = `<details class="chapters-toc" open>
     <summary>章節（${chapters.length}）</summary>
     <ol>${chapters
       .map((c, i) => `<li>
-        <span class="chapter-time">${formatTime(c.start)}</span>
+        ${article ? "" : `<span class="chapter-time">${formatTime(c.start)}</span>`}
         <a href="#" data-chapter="${i}">${escapeHtml(c.title)}</a>
       </li>`)
       .join("")}</ol>

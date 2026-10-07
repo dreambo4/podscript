@@ -278,7 +278,9 @@ def add_chapters(
         provider = summary.get_provider(
             os.environ.get("SUMMARY_PROVIDER", "claude_cli")
         )
-        raw = provider.generate_chapters(transcript, model=model)
+        raw = provider.generate_chapters(
+            transcript, model=model, kind=_content_kind(directory, result)
+        )
 
     normalized = _normalize_chapters(raw, result)
     if not normalized:
@@ -294,9 +296,11 @@ def add_chapters(
 
 
 def _normalize_chapters(raw: list, result: Result | None) -> list[dict]:
-    """依段落時間檢查與對齊章節；文章不分章節。"""
-    if result is None or is_article(result.episode):
+    """檢查章節並對齊到段落：Podcast 依時間，文章依段落編號。"""
+    if result is None:
         return []
+    if is_article(result.episode):
+        return chapters.normalize_paragraphs(raw, len(result.segments))
     return chapters.normalize(
         raw,
         [seg.start for seg in result.segments],
@@ -311,9 +315,11 @@ def _summary_transcript(directory: Path, result: Result | None):
     逐字稿不可當命令列參數傳遞（長度會超過 ARG_MAX），必須寫成檔案。
     目錄中沒有 transcript.txt 時（單集已上傳並清除），由 result 重建一份
     暫存檔，用畢刪除，不在已清空的目錄留下殘留。
+    文章一律由 result 重建，確保段落編號（見 format_text）為最新格式。
     """
     existing = directory / "transcript.txt"
-    if existing.exists() or result is None:
+    rebuild_article = result is not None and is_article(result.episode)
+    if result is None or (existing.exists() and not rebuild_article):
         yield existing
         return
 
@@ -418,11 +424,15 @@ def _write_outputs(directory: Path, result: Result) -> None:
 
 
 def format_text(result: Result) -> str:
-    """輸出供 claude CLI 讀取的全文：文章為標題加段落，其餘為逐字稿。"""
+    """輸出供 claude CLI 讀取的全文：文章為標題加段落，其餘為逐字稿。
+
+    文章每段開頭加 [n] 編號（1 起算），供模型回傳章節從第幾段開始。
+    """
     if is_article(result.episode):
-        paragraphs = [s.text for s in result.segments]
+        paragraphs = [f"[{i}] {s.text}" for i, s in enumerate(result.segments, 1)]
         # 貼上全文未填標題時，標題就是第一段開頭，不重複列出
-        if not (paragraphs and paragraphs[0].startswith(result.episode.title)):
+        first = result.segments[0].text if result.segments else ""
+        if not first.startswith(result.episode.title):
             paragraphs.insert(0, result.episode.title)
         return "\n\n".join(paragraphs)
     return format_transcript(result.segments, result.speakers)

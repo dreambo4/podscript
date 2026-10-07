@@ -527,14 +527,12 @@ def regenerate(guid: str) -> dict:
 
 @app.post("/api/episodes/{guid}/chapters")
 def add_chapters(guid: str) -> dict:
-    """只產生章節，摘要、心智圖與標籤不變。供已有摘要的舊集數補上章節。
+    """只產生章節，摘要、心智圖與標籤不變。供已有摘要的舊集數與文章補上章節。
 
     本機有摘要檔時寫入摘要檔；已上傳的單集同時寫回資料庫，
     與說話者改名相同，不需再按「再次上傳」。
     """
     result, summary_data, _from_db = _load_episode(guid)
-    if pipeline.is_article(result.episode):
-        raise HTTPException(status_code=400, detail="文章不分章節")
     if not summary_data.get("summary"):
         raise HTTPException(status_code=400, detail="請先產生摘要")
 

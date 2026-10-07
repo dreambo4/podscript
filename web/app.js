@@ -394,38 +394,47 @@ function renderKnownSpeakers(names) {
 
 function renderTranscript(data) {
   renderChapters(data);
-  if (isArticle(data.episode)) {
-    $("transcript").innerHTML = `<div class="article-text">${data.segments
-      .map((s) => `<p>${escapeHtml(s.text)}</p>`)
-      .join("")}</div>`;
-    return;
-  }
-
+  const article = isArticle(data.episode);
   const chapters = data.summary?.chapters || [];
-  // 章節的 start 等於某一段的 start（後端已對齊），依此判斷章節從哪一段開始。
+  const startsAt = chapterStarts(data.segments, chapters, article);
   // 每章包成一個 section：標題 sticky 只在所屬 section 內固定，捲到下一章時被推走。
-  const chapterAt = new Map(chapters.map((c, i) => [c.start, i]));
   const html = [];
   data.segments.forEach((s, i) => {
-    const index = chapterAt.get(s.start);
+    const index = startsAt.get(i);
     if (index !== undefined) {
       if (i > 0) html.push("</section>");
+      const time = article ? "" : `<span class="chapter-time">${formatTime(s.start)}</span>`;
       html.push(`<section class="chapter" id="chapter-${index}">
         <h4 class="chapter-title">
-          <span class="chapter-time">${formatTime(s.start)}</span>
+          ${time}
           <span>${escapeHtml(chapters[index].title)}</span>
         </h4>`);
     } else if (i === 0 && chapters.length) {
       html.push(`<section class="chapter">`);
     }
-    html.push(segmentHtml(data, s));
+    html.push(article ? `<p>${escapeHtml(s.text)}</p>` : segmentHtml(data, s));
   });
   if (chapters.length) html.push("</section>");
-  $("transcript").innerHTML = html.join("");
+  $("transcript").innerHTML = article
+    ? `<div class="article-text">${html.join("")}</div>`
+    : html.join("");
 
   $("transcript").querySelectorAll("span.seg-time").forEach((el) => {
     el.addEventListener("click", () => playAt(Number(el.dataset.at)));
   });
+}
+
+/**
+ * 各章從第幾段開始：{段落索引: 章節索引}。
+ * 後端已對齊，Podcast 章節的 start 等於某一段的 start；文章章節的 paragraph 即段落索引。
+ */
+function chapterStarts(segments, chapters, article) {
+  const bySegment = new Map();
+  chapters.forEach((c, i) => {
+    const seg = article ? c.paragraph : segments.findIndex((s) => s.start === c.start);
+    if (seg >= 0 && !bySegment.has(seg)) bySegment.set(seg, i);
+  });
+  return bySegment;
 }
 
 function segmentHtml(data, s) {
@@ -462,8 +471,10 @@ function renderChapters(data) {
         const play = youtube
           ? `<a class="chapter-play" href="${escapeHtml(youtube)}" target="_blank" rel="noopener noreferrer">YouTube ↗</a>`
           : "";
+        // 文章章節以段落定位，沒有時間
+        const time = isArticle(data.episode) ? "" : `<span class="chapter-time">${formatTime(c.start)}</span>`;
         return `<li>
-          <span class="chapter-time">${formatTime(c.start)}</span>
+          ${time}
           <a href="#" data-chapter="${i}">${escapeHtml(c.title)}</a>
           ${play}
         </li>`;
@@ -650,18 +661,19 @@ function downloadMarkdown(parts) {
   if (parts.includes("mindmap") && d.summary?.mindmap) {
     lines.push("## 心智圖", "", "```mermaid", d.summary.mindmap, "```", "");
   }
+  const chapters = d.summary?.chapters || [];
+  const startsAt = chapterStarts(d.segments, chapters, isArticle(d.episode));
+  const heading = (i) => (startsAt.has(i) ? [`### ${chapters[startsAt.get(i)].title}`, ""] : []);
   if (parts.includes("transcript") && isArticle(d.episode)) {
     lines.push("## 原文", "");
     if (safeSourceUrl(d.episode.source_url)) lines.push(d.episode.source_url, "");
-    for (const s of d.segments) lines.push(s.text, "");
+    d.segments.forEach((s, i) => lines.push(...heading(i), s.text, ""));
   } else if (parts.includes("transcript")) {
     lines.push("## 逐字稿", "");
-    const chapterAt = new Map((d.summary?.chapters || []).map((c) => [c.start, c.title]));
-    for (const s of d.segments) {
-      if (chapterAt.has(s.start)) lines.push(`### ${chapterAt.get(s.start)}`, "");
+    d.segments.forEach((s, i) => {
       const name = d.speakers[s.speaker] || s.speaker;
-      lines.push(`**[${formatTime(s.start)}] ${name}**`, "", s.text, "");
-    }
+      lines.push(...heading(i), `**[${formatTime(s.start)}] ${name}**`, "", s.text, "");
+    });
   }
 
   const blob = new Blob([lines.join("\n")], { type: "text/markdown" });

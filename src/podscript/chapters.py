@@ -1,15 +1,17 @@
 """章節的檢查與對齊。
 
-模型給的章節時間是讀逐字稿上的時間戳推出來的，可能格式錯誤、超出節目長度
-或順序顛倒；這裡逐章過濾，再把時間對齊到段落開頭，前端才能以段落定位。
+模型給的章節位置可能格式錯誤、超出範圍或順序顛倒；這裡逐章過濾，
+再對齊到段落，前端才能以段落定位。Podcast 以時間定位（start 秒數），
+文章的段落沒有時間，以段落索引定位（paragraph）。
 """
 from __future__ import annotations
 
 import bisect
 import re
 
-# 開頭補上的章節標題，用於模型給的第一章沒有從節目開頭開始時。
+# 開頭補上的章節標題，用於模型給的第一章沒有從開頭開始時。
 OPENING_TITLE = "開場"
+ARTICLE_OPENING_TITLE = "前言"
 # 少於此數的章節沒有導覽價值，整組不用。
 MIN_CHAPTERS = 2
 # 容許模型給的時間略超過節目長度（逐字稿時間戳只到秒）。
@@ -75,5 +77,45 @@ def normalize(
 
     if chapters and chapters[0]["start"] != segment_starts[0]:
         chapters.insert(0, {"start": segment_starts[0], "title": OPENING_TITLE})
+
+    return chapters if len(chapters) >= MIN_CHAPTERS else []
+
+
+def normalize_paragraphs(raw: object, paragraph_count: int) -> list[dict]:
+    """檢查文章章節，段落編號由模型讀到的 1 起算轉為 0 起算的索引。
+
+    Args:
+        raw: 模型回傳的 chapters，預期為 [{"paragraph": 1, "title": "..."}]。
+        paragraph_count: 文章段落數。
+
+    Returns:
+        [{"paragraph": 索引, "title": 標題}]，索引對應 transcript 的第幾段。
+        不合格的章節逐一略過；剩不到 MIN_CHAPTERS 章時回傳空列表。
+    """
+    if not isinstance(raw, list) or paragraph_count <= 0:
+        return []
+
+    chapters: list[dict] = []
+    last_index = -1
+    for item in raw:
+        if not isinstance(item, dict):
+            continue
+        title = item.get("title")
+        number = item.get("paragraph")
+        if isinstance(number, str) and number.strip().isdigit():
+            number = int(number)
+        if not isinstance(title, str) or not title.strip():
+            continue
+        if not isinstance(number, int) or isinstance(number, bool):
+            continue
+        index = number - 1
+        # 超出範圍、順序倒退或與前一章同段
+        if not 0 <= index < paragraph_count or index <= last_index:
+            continue
+        last_index = index
+        chapters.append({"paragraph": index, "title": title.strip()})
+
+    if chapters and chapters[0]["paragraph"] != 0:
+        chapters.insert(0, {"paragraph": 0, "title": ARTICLE_OPENING_TITLE})
 
     return chapters if len(chapters) >= MIN_CHAPTERS else []
