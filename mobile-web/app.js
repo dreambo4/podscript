@@ -329,12 +329,11 @@ function groupByYearMonth(episodes, sortField) {
 // 把手位置 = 目前捲動量在「第一個分組 ~ 頁尾」之間的比例；拖曳把手時反向換算成捲動量。
 // 目前年月以一條「判斷線」決定：平常貼齊畫面頂端，進入最後一個畫面高度的捲動量後
 // 逐漸移到畫面底部，因此捲不到頂端的末段分組在拖到底時仍會被選到。年份刻度用同一套換算。
-// 拖曳期間把手直接跟著手指，換算基準（geo）在按下時固定，
-// 不受 Safari 網址列伸縮造成的視窗高度變化影響。
+// 拖曳期間把手直接跟著手指，換算基準（geo）在按下時固定；頁面不捲動，
+// 以 transform 位移列表內容預覽，放開時才捲到目的地。
 // 多於一個年月分組才啟用。
 const SCRUBBER_HIDE_DELAY = 1500;
 const SCRUBBER_YEAR_MIN_GAP = 26; // 年份標籤間距小於此值（px）時略過，避免互相重疊
-const SCRUBBER_RELEASE_MAX_JUMP = 40; // 放開時補上最後一筆座標的最大允許差距（px）
 const SCRUBBER_HEADING_ROOM = 48; // 判斷線在畫面底部時保留的高度，讓該組標題仍在畫面內
 
 const scrubber = {
@@ -467,15 +466,13 @@ function bindScrubberDrag() {
   el.dataset.bound = "1";
 
   const thumb = el.querySelector(".scrubber-thumb");
-  // 拖曳位移 = 手指 screenY 相對按下點的位移，取最近三筆的中位數，
-  // 濾掉 iOS Safari 在頁面捲動中偶發的單筆離群座標
-  let startScreenY = 0;
-  let startThumbY = 0; // 按下時把手在軌道內的位置
-  let recentY = [];
-  let pendingScrollY = null;
+  let startClientY = 0;
+  let startThumbY = 0;   // 按下時把手在軌道內的位置
+  let startScrollY = 0;  // 按下時的捲動量，拖曳期間頁面維持在此
+  let targetScrollY = 0; // 放開時要捲到的位置
+  let movingEls = [];    // 拖曳期間以 transform 位移的列表內容
 
   window.addEventListener("scroll", () => {
-    // 拖曳中由手指決定把手與泡泡，捲動事件不回頭改它們，避免互相拉扯
     if (scrubber.dragging) return;
     if (!scrubber.enabled || document.querySelector("#list-view").hidden) return;
     const geo = measureScrubberGeo();
@@ -484,7 +481,7 @@ function bindScrubberDrag() {
     showScrubberBriefly();
   }, { passive: true });
 
-  // iOS Safari 對 touch-action 支援不完整，手指在把手上移動時仍可能觸發原生捲動，需在此擋掉
+  // 手指在把手上移動時不可觸發頁面的原生捲動
   thumb.addEventListener("touchstart", e => e.preventDefault(), { passive: false });
   thumb.addEventListener("touchmove", e => e.preventDefault(), { passive: false });
 
@@ -493,52 +490,39 @@ function bindScrubberDrag() {
     thumb.setPointerCapture(e.pointerId);
     scrubber.dragging = true;
     scrubber.geo = measureScrubberGeo();
-    startScreenY = e.screenY;
-    recentY = [e.screenY];
-    appliedY = e.screenY;
-    // 拖曳期間擋掉頁面的回彈
-    document.documentElement.classList.add("scrubbing");
+    startClientY = e.clientY;
     startThumbY = thumb.getBoundingClientRect().top - el.getBoundingClientRect().top;
+    startScrollY = window.scrollY;
+    targetScrollY = startScrollY;
+    movingEls = [...document.querySelectorAll("#list-view > :not(#scrubber)")];
+    movingEls.forEach(node => { node.style.willChange = "transform"; });
+    document.documentElement.classList.add("scrubbing");
     cacheScrubberSections();
     renderScrubberYears(scrubber.geo);
-    updateScrubberBubble(window.scrollY, scrubber.geo);
+    updateScrubberBubble(startScrollY, scrubber.geo);
     el.classList.add("dragging");
     clearTimeout(scrubber.hideTimer);
   });
 
-  let appliedY = 0;
-
-  function applyFingerY(fingerY) {
-    const geo = scrubber.geo;
-    appliedY = fingerY;
-    const ratio = geo.track > 0 ? Math.min(1, Math.max(0, (startThumbY + fingerY - startScreenY) / geo.track)) : 0;
-    const scrollY = geo.start + ratio * (geo.end - geo.start);
-    setScrubberThumb(ratio, geo);
-    updateScrubberBubble(scrollY, geo);
-
-    // 同一畫格內只捲動一次
-    if (pendingScrollY === null) {
-      requestAnimationFrame(() => {
-        window.scrollTo(0, pendingScrollY);
-        pendingScrollY = null;
-      });
-    }
-    pendingScrollY = scrollY;
-  }
-
+  // 拖曳期間不捲動頁面，改以 transform 位移列表內容來預覽，放開時才真正捲動一次
   thumb.addEventListener("pointermove", (e) => {
     if (!scrubber.dragging) return;
-    recentY = [...recentY.slice(-2), e.screenY];
-    applyFingerY([...recentY].sort((a, b) => a - b)[Math.floor(recentY.length / 2)]);
+    const geo = scrubber.geo;
+    const ratio = geo.track > 0 ? Math.min(1, Math.max(0, (startThumbY + e.clientY - startClientY) / geo.track)) : 0;
+    targetScrollY = geo.start + ratio * (geo.end - geo.start);
+    setScrubberThumb(ratio, geo);
+    updateScrubberBubble(targetScrollY, geo);
+    const offset = startScrollY - targetScrollY;
+    movingEls.forEach(node => { node.style.transform = `translateY(${offset}px)`; });
   });
 
   const endDrag = () => {
     if (!scrubber.dragging) return;
-    // 中位數會落後一筆，手指停下後不再有新事件；放開時補上最後一筆（差距過大視為離群值不採用）
-    const lastY = recentY[recentY.length - 1];
-    if (Math.abs(lastY - appliedY) < SCRUBBER_RELEASE_MAX_JUMP) applyFingerY(lastY);
     scrubber.dragging = false;
     scrubber.geo = null;
+    window.scrollTo(0, targetScrollY);
+    movingEls.forEach(node => { node.style.transform = ""; node.style.willChange = ""; });
+    movingEls = [];
     document.documentElement.classList.remove("scrubbing");
     el.classList.remove("dragging");
     showScrubberBriefly();

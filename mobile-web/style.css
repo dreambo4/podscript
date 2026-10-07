@@ -588,8 +588,10 @@ body {
   .scrubber, .scrubber-bubble, .scrubber-years { transition: none; }
 }
 
-/* 拖曳把手期間擋掉頁面的回彈 */
+/* 拖曳把手期間擋掉頁面的回彈。列表內容以 transform 位移預覽，
+   分組標題暫時取消固定，顯示在列表中的原位，與實際捲動到該處時一致 */
 html.scrubbing { overscroll-behavior: none; }
+html.scrubbing #list-view .group-heading { position: static; }
 
 /* ── 篩選 Bottom Sheet ───────────────────────────── */
 .sheet-wrap {
