@@ -7,6 +7,8 @@
   --accent: #2f6f4f;
   --warn: #9a7b2e;
   --topbar-h: 61px;
+  --sidebar-w: 340px;
+  --sidebar-bg: #f2f0ec;
 
   /* 心智圖分支色（root 為 --accent，分支 0~6 依序輪替） */
   --mm-root: var(--accent);
@@ -27,7 +29,7 @@ body {
 /* 清單常駐左側，內容在右側切換，任何時候都能換集 */
 .layout {
   display: grid;
-  grid-template-columns: 280px minmax(0, 1fr);
+  grid-template-columns: var(--sidebar-w) minmax(0, 1fr);
   align-items: start;
 }
 
@@ -42,7 +44,8 @@ body {
   height: calc(100vh - var(--topbar-h));
   overflow-y: auto;
   border-right: 1px solid var(--line);
-  background: var(--card);
+  /* 側欄鋪淺底色，單集卡片維持白色才浮得出來 */
+  background: var(--sidebar-bg);
   padding: 16px;
 }
 
@@ -276,6 +279,21 @@ button:disabled { opacity: .5; cursor: default; }
 }
 
 .block-head h3 { margin: 0; font-size: 15px; }
+
+/* 封面：淡色底＋同色系線條插圖，與手機列表卡片相同；svg 已由後端過濾 */
+.cover-row { display: flex; align-items: center; gap: 16px; }
+.cover-row .muted { margin: 0; }
+.cover-preview {
+  width: 96px;
+  height: 96px;
+  border-radius: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: color-mix(in srgb, var(--cover-color) 15%, var(--card));
+  color: var(--cover-color);
+}
+.cover-preview svg { width: 66px; height: 66px; overflow: visible; }
 
 /* 心智圖用 markmap 渲染：SVG 自適應內容大小，容器給固定高度供其展開/縮放。
    節點色、線粗由 mindmap-render.js 以 JS 指定，CSS 只管版面與字級。 */
@@ -572,8 +590,6 @@ a.seg-time:hover { color: var(--accent); text-decoration: underline; }
   line-height: 1.5;
 }
 
-.episode-list li:hover { background: #f2f0ed; }
-
 /* 分區標題：處理中／未上傳／已上傳 */
 .episode-list li.group {
   padding: 14px 10px 4px;
@@ -585,28 +601,60 @@ a.seg-time:hover { color: var(--accent); text-decoration: underline; }
   border-radius: 0;
 }
 
-.episode-list li.group:hover { background: none; }
 .episode-list li.group:first-child { padding-top: 4px; }
 .count { opacity: .6; }
 
-.episode-list li.selected {
-  background: #eef3ef;
-  box-shadow: inset 2px 0 0 var(--accent);
+/* 單集卡片：與手機列表相同的樣式（封面、類型在名稱前、灰色 # 標籤），不含收藏 */
+.episode-list li.ep-card {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 8px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--card);
 }
+.episode-list li.ep-card:hover { border-color: #cfcac2; }
+.episode-list li.ep-card.selected {
+  border-color: var(--accent);
+  background: #eef3ef;
+}
+.episode-list li.selected .ep-name { color: var(--accent); }
 
-.episode-list li.selected .ep-name { color: var(--accent); font-weight: 600; }
+.ep-cover {
+  --cover-color: var(--muted);
+  flex: none;
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: color-mix(in srgb, var(--cover-color) 15%, var(--card));
+  color: var(--cover-color);
+}
+.ep-cover svg { width: 28px; height: 28px; overflow: visible; }
+.ep-cover-empty { background: #f0eeeb; color: var(--muted); }
+.ep-cover-empty .kind-icon { width: 20px; height: 20px; }
+
+.ep-body { flex: 1; min-width: 0; }
 
 .ep-name {
   display: block;
   margin-bottom: 2px;
-  /* 標題長，限兩行避免單集列過高 */
+  font-weight: 700;
+  /* 標題長，限兩行避免單集卡片過高 */
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
 
-.episode-list .muted, .episode-list .ep-status { font-size: 12px; }
+.ep-meta { display: block; font-size: 12px; color: var(--muted); }
+.ep-meta .nowrap { white-space: nowrap; }
+.kind-icon { display: inline-block; width: 12px; height: 12px; margin-right: 4px; vertical-align: -1px; }
+.episode-list .ep-status { display: flex; align-items: center; gap: 6px; font-size: 12px; margin-top: 2px; }
+.episode-list .ep-status.muted { color: var(--muted); }
+.ep-tags { display: flex; flex-wrap: wrap; gap: 0 8px; margin-top: 4px; font-size: 12px; color: var(--muted); }
 
 dialog {
   border: 1px solid var(--line);
@@ -637,15 +685,6 @@ dialog button.primary { background: var(--accent); border-color: var(--accent); 
 
 /* 文章原文：只有段落，沒有時間與說話者 */
 .article-text p { margin: 0 0 14px; line-height: 1.8; }
-.ep-kind {
-  display: inline-block;
-  margin-right: 6px;
-  padding: 0 5px;
-  border: 1px solid var(--line);
-  border-radius: 4px;
-  font-size: 11px;
-  color: var(--muted);
-}
 
 .error { color: #a33; }
 
@@ -658,7 +697,7 @@ dialog button.primary { background: var(--accent); border-color: var(--accent); 
     position: fixed;
     top: var(--topbar-h);
     left: 0;
-    width: 280px;
+    width: var(--sidebar-w);
     max-width: 85vw;
     z-index: 9;
     transform: translateX(-100%);

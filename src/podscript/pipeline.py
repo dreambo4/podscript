@@ -204,9 +204,9 @@ def summarize(
     force: bool = False,
     summary_model: str | None = None,
 ) -> summary.Summary | None:
-    """產生摘要、心智圖、標籤與章節。
+    """產生摘要、心智圖、標籤、章節與封面。
 
-    四項由同一次呼叫產生（見 summary 模組）；章節依段落時間檢查與對齊後才寫入。已有結果且未指定 force 時沿用，
+    五項由同一次呼叫產生（見 summary 模組）；章節依段落時間檢查與對齊後才寫入。已有結果且未指定 force 時沿用，
     供「重新生成」按鈕在不重跑轉錄的情況下單獨呼叫。
 
     失敗時回傳 None 並保留既有逐字稿：摘要是附加價值，
@@ -293,6 +293,38 @@ def add_chapters(
             json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8"
         )
     return normalized
+
+
+def regenerate_cover(
+    directory: Path, result: Result, summary_data: dict, *, summary_model: str | None = None
+) -> dict:
+    """只重畫封面，不動摘要、心智圖、標籤與章節。
+
+    依標題、摘要與標籤畫，不讀逐字稿。本機有 result.json 時一併寫入；
+    已上傳者由呼叫端寫回資料庫。
+
+    Returns:
+        過濾後的封面 {"svg", "color"}，見 cover.normalize。
+
+    Raises:
+        summary.SummaryError: 生成失敗，或模型回傳的封面不可用。
+    """
+    model = summary_model or os.environ.get("CLAUDE_CLI_MODEL", "opus")
+    provider = summary.get_provider(os.environ.get("SUMMARY_PROVIDER", "claude_cli"))
+    cover = provider.generate_cover(
+        title=result.episode.title,
+        summary=summary_data.get("summary") or "",
+        hashtags=summary_data.get("hashtags") or [],
+        model=model,
+    )
+
+    data = load_summary(directory)
+    if data is not None:
+        data["cover"] = cover
+        (directory / "result.json").write_text(
+            json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8"
+        )
+    return cover
 
 
 def _normalize_chapters(raw: list, result: Result | None) -> list[dict]:

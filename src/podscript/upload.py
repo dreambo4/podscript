@@ -29,11 +29,11 @@ UPSERT_SQL = """
 insert into episodes (
     platform, source_url, episode_guid, podcast_name, title,
     published_at, duration_sec, summary, mindmap_mermaid, hashtags,
-    transcript, speakers, provenance, transcript_text, chapters
+    transcript, speakers, provenance, transcript_text, chapters, cover
 ) values (
     %(platform)s, %(source_url)s, %(episode_guid)s, %(podcast_name)s, %(title)s,
     %(published_at)s, %(duration_sec)s, %(summary)s, %(mindmap_mermaid)s, %(hashtags)s,
-    %(transcript)s, %(speakers)s, %(provenance)s, %(transcript_text)s, %(chapters)s
+    %(transcript)s, %(speakers)s, %(provenance)s, %(transcript_text)s, %(chapters)s, %(cover)s
 )
 on conflict (episode_guid) do update set
     source_url      = excluded.source_url,
@@ -49,6 +49,8 @@ on conflict (episode_guid) do update set
     provenance      = excluded.provenance,
     transcript_text = excluded.transcript_text,
     chapters        = excluded.chapters,
+    -- 這次沒有封面（模型畫壞被過濾、或功能上線前的舊摘要檔）時保留原本的，不覆蓋成空值
+    cover           = coalesce(excluded.cover, episodes.cover),
     updated_at      = now()
 returning id, (xmax = 0) as inserted
 """
@@ -201,13 +203,14 @@ def build_payload(directory: Path) -> dict:
             seg.text for seg in result.segments
         ),
         "chapters": json.dumps(summary.get("chapters") or [], ensure_ascii=False),
+        "cover": json.dumps(summary["cover"], ensure_ascii=False) if summary.get("cover") else None,
     }
 
 
 FETCH_COLUMNS = """
     platform, source_url, episode_guid, podcast_name, title,
     published_at, duration_sec, summary, mindmap_mermaid, hashtags,
-    transcript, speakers, provenance, chapters, updated_at, created_at
+    transcript, speakers, provenance, chapters, cover, updated_at, created_at
 """
 
 
@@ -259,7 +262,7 @@ def fetch_all() -> list[tuple[pipeline.Result, dict, str, str]]:
     items = []
     for row in rows:
         result, summary = _row_to_result(row)
-        items.append((result, summary, _iso(row[14]), _iso(row[15])))
+        items.append((result, summary, _iso(row[15]), _iso(row[16])))
     return items
 
 
@@ -272,7 +275,7 @@ def _row_to_result(row: tuple) -> tuple[pipeline.Result, dict]:
     (
         platform, source_url, episode_guid, podcast_name, title,
         published_at, duration_sec, summary, mindmap, hashtags,
-        transcript, speakers, provenance, chapters, *_timestamps,
+        transcript, speakers, provenance, chapters, cover, *_timestamps,
     ) = row
 
     episode = Episode(
@@ -298,6 +301,7 @@ def _row_to_result(row: tuple) -> tuple[pipeline.Result, dict]:
         "mindmap": mindmap,
         "hashtags": list(hashtags or []),
         "chapters": _as_json(chapters, []),
+        "cover": _as_json(cover, None),
     }
 
 
@@ -321,6 +325,7 @@ def update_episode(
     summary: dict | None = None,
     transcript_text: str | None = None,
     chapters: list[dict] | None = None,
+    cover: dict | None = None,
 ) -> None:
     """更新已上傳單集的指定欄位。
 
@@ -344,6 +349,9 @@ def update_episode(
     if chapters is not None:
         sets.append("chapters = %(chapters)s")
         params["chapters"] = json.dumps(chapters, ensure_ascii=False)
+    if cover is not None:
+        sets.append("cover = %(cover)s")
+        params["cover"] = json.dumps(cover, ensure_ascii=False)
     if summary is not None:
         sets += [
             "summary = %(summary)s",

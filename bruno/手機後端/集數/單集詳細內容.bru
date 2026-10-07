@@ -12,6 +12,7 @@ get {
 
 docs {
   platform：來源平台（apple／youtube／article）。
+  cover：內容封面 {"svg": "...", "color": "#rrggbb"}，svg 為 viewBox 0 0 48 48 的內部元素；尚未產生時為 null。
   文章的 transcript 每筆是一段正文（start／end 為 0、speaker 為空字串），前端顯示為「原文」。
   source_url：原始網址，前端僅在 https 開頭時顯示為連結；
   YouTube 集數另以此網址加上 t=<秒>s 做逐字稿時間戳跳轉。

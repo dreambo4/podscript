@@ -440,7 +440,9 @@ body {
   color: inherit;
 }
 
+/* 封面：淡色底＋同色系線條插圖；深色主題加深底色、提亮線條 */
 .ep-cover {
+  --cover-color: var(--muted);
   flex: none;
   width: 52px;
   height: 52px;
@@ -448,16 +450,33 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #fff;
-  font-weight: 700;
-  font-size: 18px;
-  font-family: -apple-system, "PingFang TC", sans-serif;
+  background: color-mix(in srgb, var(--cover-color) 15%, var(--card));
+  color: var(--cover-color);
+}
+.ep-cover svg:not(.icon) { width: 36px; height: 36px; overflow: visible; }
+/* 尚無封面：灰色底＋類型 icon */
+.ep-cover-empty { background: color-mix(in srgb, var(--muted) 10%, var(--card)); color: var(--muted); }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .ep-cover:not(.ep-cover-empty) {
+    background: color-mix(in srgb, var(--cover-color) 24%, var(--card));
+    color: color-mix(in srgb, var(--cover-color), #fff 45%);
+  }
+}
+:root[data-theme="dark"] .ep-cover:not(.ep-cover-empty) {
+  background: color-mix(in srgb, var(--cover-color) 24%, var(--card));
+  color: color-mix(in srgb, var(--cover-color), #fff 45%);
 }
 
 .ep-body { flex: 1; min-width: 0; }
 .ep-title { display: block; font-weight: 700; font-size: 14px; line-height: 1.5; margin-bottom: 4px; padding-right: 26px; }
 .ep-meta { display: block; font-size: 12px; color: var(--muted); margin-bottom: 6px; }
-.ep-kind-icon { margin-right: 4px; vertical-align: -1px; }
+.ep-kind-icon { display: inline-block; margin-right: 4px; vertical-align: -1px; }
+
+/* 卡片上的標籤：灰色純文字 #，不搶封面的視覺焦點 */
+.ep-card .tags { gap: 2px 10px; }
+.ep-card .tag-btn { gap: 0; background: none; padding: 0; border-radius: 0; color: var(--muted); font-weight: 500; }
+.ep-card .tag-btn::before { content: "#"; }
+.ep-card .tag-btn:hover, .ep-card .tag-btn:active { background: none; color: var(--accent); }
 .ep-snippet { display: block; font-size: 12px; line-height: 1.6; color: var(--ink); margin-bottom: 6px; }
 .ep-snippet mark { background: var(--accent-soft); color: var(--accent); font-weight: 700; border-radius: 3px; padding: 0 1px; }
 .ep-match-count { margin-left: 6px; color: var(--muted); white-space: nowrap; }

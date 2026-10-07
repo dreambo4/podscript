@@ -218,15 +218,33 @@ async function showEpisode(guid) {
   window.scrollTo({ top: 0, behavior: "smooth" });
 }
 
+// 未寫的屬性沿用這組預設（線條插圖風格），被過濾掉屬性的元素才不會變成黑色實心
+const COVER_SVG_DEFAULTS = 'viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"';
+
+/** 摘要中的封面；svg 已由後端以白名單過濾（見 cover.py）。 */
+function renderCover(cover) {
+  const el = $("cover");
+  el.hidden = !cover;
+  $("cover-empty").hidden = !!cover;
+  if (!cover) {
+    el.innerHTML = "";
+    return;
+  }
+  el.style.setProperty("--cover-color", cover.color);
+  el.innerHTML = `<svg ${COVER_SVG_DEFAULTS} aria-hidden="true">${cover.svg}</svg>`;
+}
+
 function renderSummary(summary) {
   renderTagReview(summary);
   if (!summary) {
+    renderCover(null);
     $("summary-text").textContent = "尚未生成";
     $("hashtags").innerHTML = "";
     $("mindmap").innerHTML = "";
     return;
   }
 
+  renderCover(summary.cover);
   $("summary-text").textContent = summary.summary;
   $("hashtags").innerHTML = (summary.hashtags || [])
     .map((t) => `<span>#${escapeHtml(t)}</span>`)
@@ -554,6 +572,26 @@ $("btn-regen").addEventListener("click", async (e) => {
   }
 });
 
+$("btn-regen-cover").addEventListener("click", async (e) => {
+  const btn = e.target;
+  if (!current.summary?.summary) {
+    alert("請先產生摘要");
+    return;
+  }
+  btn.disabled = true;
+  btn.textContent = "生成中…";
+  try {
+    const { cover } = await api(`/api/episodes/${current.guid}/cover`, { method: "POST" });
+    current.summary = { ...current.summary, cover };
+    renderCover(cover);
+  } catch (err) {
+    alert(err.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "重新生成封面";
+  }
+});
+
 // ── 上傳 Supabase ───────────────────────────────────
 
 $("btn-upload").addEventListener("click", async (e) => {
@@ -847,28 +885,57 @@ function closeSidebar() {
   $("sidebar").classList.remove("open");
 }
 
+// 內容類型：YouTube 為影片、文章為文章，其餘平台為音檔（與手機卡片相同）
+const EP_KINDS = {
+  audio: { icon: "ic-audio", label: "音檔" },
+  video: { icon: "ic-video", label: "影片" },
+  article: { icon: "ic-article", label: "文章" },
+};
+
+function episodeKind(e) {
+  return e.kind === "article" ? "article" : e.platform === "youtube" ? "video" : "audio";
+}
+
+/** 清單卡片左側封面；svg 已由後端過濾。沒有封面時顯示灰色類型 icon。 */
+function listCoverHtml(e) {
+  if (!e.cover?.svg) {
+    return `<div class="ep-cover ep-cover-empty"><svg class="kind-icon"><use href="#${EP_KINDS[episodeKind(e)].icon}"/></svg></div>`;
+  }
+  return `<div class="ep-cover" style="--cover-color:${escapeHtml(e.cover.color)}"><svg ${COVER_SVG_DEFAULTS} aria-hidden="true">${e.cover.svg}</svg></div>`;
+}
+
 function episodeRow(e, selected) {
-  const meta = e.processing
+  const { icon, label } = EP_KINDS[episodeKind(e)];
+  const meta = [
+    escapeHtml(e.podcast_name),
+    (e.published_at || "").slice(0, 10),
+    e.duration_sec ? `${Math.round(e.duration_sec / 60)} 分鐘` : "",
+  ]
+    .filter(Boolean)
+    // 每段不斷行，窄欄換行時只在「·」之間換，不會把「61 分鐘」拆開
+    .map((part) => `<span class="nowrap">${part}</span>`)
+    .join(" · ");
+
+  // 處理進度與待辦提示另起一行，與手機卡片的版面一致
+  const status = e.processing
     ? `<span class="ep-status"><span class="spinner"></span> ${escapeHtml(
         STAGE_LABELS[e.stage] || e.stage
       )}中${e.percent != null ? ` ${e.percent}%` : "…"}</span>`
-    : `<span class="${e.error ? "ep-error" : "muted"}">${[
-        (e.published_at || "").slice(0, 10),
-        e.error
-          ? "未完成，點擊繼續"
-          : !e.has_summary
-            ? "未生成摘要"
-            : !e.has_audio && e.kind !== "article"
-              ? "已釋出空間"
-              : "",
-      ]
-        .filter(Boolean)
-        .join(" · ")}</span>`;
+    : e.error
+      ? `<span class="ep-status ep-error">未完成，點擊繼續</span>`
+      : !e.has_summary
+        ? `<span class="ep-status muted">未生成摘要</span>`
+        : "";
 
-  const kind = e.kind === "article" ? `<span class="ep-kind">文章</span>` : "";
-  return `<li data-guid="${e.guid}" class="${selected ? "selected" : ""}">
-    <span class="ep-name">${kind}${escapeHtml(e.title)}</span>
-    ${meta}
+  const tags = (e.hashtags || []).map((t) => `<span>#${escapeHtml(t)}</span>`).join("");
+  return `<li data-guid="${e.guid}" class="ep-card${selected ? " selected" : ""}">
+    ${listCoverHtml(e)}
+    <div class="ep-body">
+      <span class="ep-name">${escapeHtml(e.title)}</span>
+      ${meta ? `<span class="ep-meta"><svg class="kind-icon" role="img" aria-label="${label}"><use href="#${icon}"/></svg>${meta}</span>` : ""}
+      ${status}
+      ${tags ? `<span class="ep-tags">${tags}</span>` : ""}
+    </div>
   </li>`;
 }
 

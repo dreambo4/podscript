@@ -21,12 +21,15 @@ params:query {
   ~tags: 
   ~tag: 
   ~channel: 
+  ~kind: video
   ~favorites_only: true
 }
 
 docs {
   每筆附 platform（apple／youtube／article），前端據此標示文章。
+  每筆附 cover：{"svg": "...", "color": "#rrggbb"}，svg 為 viewBox 0 0 48 48 的內部元素（本機已過濾，前端顯示前再過濾一次）；尚未產生時為 null。
   sort：created_at／published_at
+  kind：audio（音檔，YouTube 與文章以外的平台）／video（影片，YouTube）／article（文章）；不帶則不篩選
   tag_mode：all（須同時包含全部標籤）／any（符合任一）
   tags 可重複多次，例如 tags=AI&tags=投資
   有 q 時每集多回傳：

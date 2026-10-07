@@ -20,6 +20,15 @@ def is_media_url(url: str) -> bool:
     return any(resolver.can_handle(url) for resolver in _RESOLVERS)
 
 
+def platform_of(url: str) -> str | None:
+    """只看網址判斷平台，不連網；不是支援的影音平台時回傳 None。"""
+    url = url.strip()
+    for resolver in _RESOLVERS:
+        if resolver.can_handle(url):
+            return resolver.platform
+    return None
+
+
 def resolve(url: str) -> Episode:
     """依網址選用對應平台的 resolver。
 

@@ -1,0 +1,18 @@
+meta {
+  name: 重新生成封面
+  type: http
+  seq: 17
+}
+
+post {
+  url: {{localBase}}/api/episodes/{{guid}}/cover
+  body: none
+  auth: none
+}
+
+docs {
+  只重畫封面，摘要、心智圖、標籤與章節不變；依標題、摘要與標籤畫，不送逐字稿。
+  回應：{"cover": {"svg": "...", "color": "#rrggbb"}}；svg 為 viewBox 0 0 48 48 的內部元素，已以白名單過濾。
+  本機有摘要檔時寫入摘要檔；已上傳的單集同時寫回資料庫 episodes.cover，不需再次上傳。
+  尚未產生摘要回 400；模型回傳的封面不可用回 502。
+}

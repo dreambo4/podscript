@@ -200,27 +200,66 @@ function showDetail() {
   showView("detail-view");
 }
 
-// ── 卡片頭像（頻道色塊＋首字，尚無真實封面圖）──────────────
-const COVER_COLORS = ["#3a6b52", "#a3672f", "#5c6bb0", "#b0555c", "#4d8b8b", "#8a5ab0"];
+// ── 卡片封面（摘要模型依內容畫的線條插圖）──────────────
+// 資料庫的 svg 已由本機以白名單過濾（cover.py），顯示前在此再過濾一次：
+// 只留繪圖元素與幾何、樣式屬性，顏色只允許 none／currentColor。
+const COVER_TAGS = new Set(["path", "circle", "ellipse", "rect", "line", "polyline", "polygon", "g"]);
+const COVER_NUMBER = /^-?\d*\.?\d+(e-?\d+)?$/i;
+const COVER_ATTRS = {
+  d: /^[MmLlHhVvCcSsQqTtAaZz0-9eE.,\s+-]+$/,
+  points: /^[0-9eE.,\s+-]+$/,
+  "stroke-dasharray": /^[0-9eE.,\s+-]+$/,
+  transform: /^(\s*(rotate|translate|scale)\(\s*-?\d*\.?\d+(\s*[,\s]\s*-?\d*\.?\d+){0,2}\s*\)\s*)+$/i,
+  fill: /^(none|currentColor)$/i,
+  stroke: /^(none|currentColor)$/i,
+  "stroke-linecap": /^(butt|round|square)$/,
+  "stroke-linejoin": /^(miter|round|bevel)$/,
+  "fill-rule": /^(nonzero|evenodd)$/,
+};
+for (const name of ["cx", "cy", "r", "rx", "ry", "x", "y", "width", "height", "x1", "y1", "x2", "y2",
+  "stroke-width", "opacity", "fill-opacity", "stroke-opacity"]) COVER_ATTRS[name] = COVER_NUMBER;
+// 未寫的屬性沿用這組預設（線條插圖風格），被過濾掉屬性的元素才不會變成黑色實心
+const COVER_SVG_DEFAULTS = 'viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"';
+const SVG_NS = "http://www.w3.org/2000/svg";
 
-function coverColorFor(podcastName) {
-  let hash = 0;
-  for (let i = 0; i < podcastName.length; i++) hash = (hash * 31 + podcastName.charCodeAt(i)) >>> 0;
-  return COVER_COLORS[hash % COVER_COLORS.length];
+/** 以白名單重建封面 SVG；沒有可用元素時回傳 null。 */
+function sanitizeCoverSvg(markup) {
+  if (typeof markup !== "string" || !markup.trim() || markup.length > 8000 || markup.includes("<!")) return null;
+  const doc = new DOMParser().parseFromString(`<svg xmlns="${SVG_NS}">${markup}</svg>`, "image/svg+xml");
+  if (doc.querySelector("parsererror")) return null;
+
+  const out = document.createElementNS(SVG_NS, "g");
+  let count = 0;
+  const copy = (node, parent) => {
+    const tag = node.localName;
+    if (!COVER_TAGS.has(tag) || count >= 40) return;
+    count++;
+    const el = document.createElementNS(SVG_NS, tag);
+    for (const attr of node.attributes) {
+      const rule = COVER_ATTRS[attr.localName];
+      if (rule && rule.test(attr.value.trim())) el.setAttribute(attr.localName, attr.value.trim());
+    }
+    [...node.children].forEach(child => copy(child, el));
+    if (tag !== "g" || el.childNodes.length) parent.appendChild(el);
+  };
+  [...doc.documentElement.children].forEach(child => copy(child, out));
+  return out.childNodes.length ? out.innerHTML : null;
 }
 
-// 優先序：中文字 > 英文字母 > 字串第一個字元 > 都不符合則空字串
-function coverInitial(podcastName) {
-  const name = (podcastName || "").trim();
-  const cjk = name.match(/[一-鿿]/);
-  if (cjk) return cjk[0];
-  const alpha = name.match(/[a-zA-Z]/);
-  if (alpha) return alpha[0];
-  return name.charAt(0) || "";
+const HEX_COLOR = /^#[0-9a-f]{6}$/i;
+
+function episodeKind(ep) {
+  return isArticle(ep) ? "article" : ep.platform === "youtube" ? "video" : "audio";
 }
 
-function renderCoverHtml(podcastName) {
-  return `<div class="ep-cover" style="background:${coverColorFor(podcastName || "")}">${coverInitial(podcastName)}</div>`;
+/** 卡片左側封面；沒有封面或過濾後為空時，退回類型 icon。 */
+function coverHtml(ep) {
+  const svg = sanitizeCoverSvg(ep.cover?.svg);
+  if (!svg) {
+    return `<div class="ep-cover ep-cover-empty"><svg class="icon"><use href="#${EP_KINDS[episodeKind(ep)].icon}"/></svg></div>`;
+  }
+  const color = HEX_COLOR.test(ep.cover.color || "") ? ep.cover.color : "";
+  return `<div class="ep-cover"${color ? ` style="--cover-color:${color}"` : ""}><svg ${COVER_SVG_DEFAULTS} aria-hidden="true">${svg}</svg></div>`;
 }
 
 // ── 列表頁 ────────────────────────────────────────
@@ -231,6 +270,7 @@ let currentChannel = "";
 let currentTags = [];
 let currentTagMode = "any";
 let currentFavoritesOnly = false;
+let currentKind = ""; // "" 為全部，其餘見 EP_KINDS
 let channelsLoaded = false;
 let allChannels = [];
 
@@ -264,6 +304,18 @@ function snippetHtml(ep) {
   return `<span class="ep-snippet">${highlightHtml(ep.snippet, ep.query, ep.searchOptions)}<span class="ep-match-count">${ep.match_count} 處</span></span>`;
 }
 
+// 內容類型：YouTube 為影片、文章為文章，其餘平台為音檔
+const EP_KINDS = {
+  audio: { icon: "ic-audio", label: "音檔" },
+  video: { icon: "ic-video", label: "影片" },
+  article: { icon: "ic-article", label: "文章" },
+};
+
+function kindIconHtml(ep) {
+  const { icon, label } = EP_KINDS[episodeKind(ep)];
+  return `<svg class="icon icon-xs ep-kind-icon" role="img" aria-label="${label}"><use href="#${icon}"/></svg>`;
+}
+
 function renderEpisodeCard(ep) {
   const div = document.createElement("div");
   div.className = "ep-card";
@@ -273,10 +325,10 @@ function renderEpisodeCard(ep) {
   const date = ep[getSort()];
   div.innerHTML = `
     <a href="${href}" class="ep-link">
-      ${renderCoverHtml(ep.podcast_name)}
+      ${coverHtml(ep)}
       <div class="ep-body">
         <span class="ep-title">${escapeHtml(ep.title)}</span>
-        <span class="ep-meta">${isArticle(ep) ? `<svg class="icon icon-xs ep-kind-icon" aria-label="文章"><use href="#ic-article"/></svg>` : ""}${escapeHtml(ep.podcast_name)}${date ? " · " + date.slice(0, 10) : ""}${ep.duration_sec ? " · " + formatDuration(ep.duration_sec) : ""}</span>
+        <span class="ep-meta">${kindIconHtml(ep)}${escapeHtml(ep.podcast_name)}${date ? " · " + date.slice(0, 10) : ""}${ep.duration_sec ? " · " + formatDuration(ep.duration_sec) : ""}</span>
         ${snippetHtml(ep)}
         <span class="tags">${cardTagsHtml(ep.hashtags)}</span>
       </div>
@@ -591,6 +643,10 @@ function renderActiveFilters() {
       onRemove: () => { currentTags = currentTags.filter(t => t !== tag); loadList(); },
     });
   });
+  if (currentKind) {
+    const { icon, label } = EP_KINDS[currentKind];
+    chips.push({ label, icon, onRemove: () => { currentKind = ""; loadList(); } });
+  }
   if (currentFavoritesOnly) {
     chips.push({ label: "只看收藏", icon: "ic-heart-fill", onRemove: () => { currentFavoritesOnly = false; loadList(); } });
   }
@@ -613,7 +669,7 @@ function renderActiveFilters() {
 }
 
 function updateFilterDot() {
-  const active = !!(currentChannel || currentTags.length || currentFavoritesOnly);
+  const active = !!(currentChannel || currentTags.length || currentKind || currentFavoritesOnly);
   document.querySelector("#filter-dot").hidden = !active;
   document.querySelector("#btn-open-filter").classList.toggle("active", active);
 }
@@ -652,6 +708,7 @@ async function loadList({ quiet = false } = {}) {
   currentTags.forEach(t => query.append("tags", t));
   query.set("tag_mode", currentTagMode);
   if (currentChannel) query.set("channel", currentChannel);
+  if (currentKind) query.set("kind", currentKind);
   if (currentFavoritesOnly) query.set("favorites_only", "true");
   query.set("sort", getSort());
   query.set("limit", 500); // 一次性全拉，見 spec §5.5 未來優化項目
@@ -868,6 +925,13 @@ setQueueOpen(localStorage.getItem(QUEUE_OPEN_KEY) === "1");
 let sheetSort = getSort();
 let sheetChannel = currentChannel;
 let sheetFavoritesOnly = currentFavoritesOnly;
+let sheetKind = currentKind;
+
+function syncSheetKindChips() {
+  document.querySelectorAll("#filter-sheet [data-kind]").forEach(btn => {
+    btn.classList.toggle("active", btn.dataset.kind === sheetKind);
+  });
+}
 
 function renderSheetChannelChips() {
   const container = document.querySelector("#sheet-channel-chips");
@@ -889,8 +953,10 @@ function openFilterSheet() {
   sheetSort = getSort();
   sheetChannel = currentChannel;
   sheetFavoritesOnly = currentFavoritesOnly;
+  sheetKind = currentKind;
 
   renderSheetChannelChips();
+  syncSheetKindChips();
   document.querySelectorAll("#filter-sheet [data-sort]").forEach(btn => {
     btn.classList.toggle("active", btn.dataset.sort === sheetSort);
   });
@@ -915,6 +981,13 @@ document.querySelectorAll("#filter-sheet [data-sort]").forEach(btn => {
   });
 });
 
+document.querySelectorAll("#filter-sheet [data-kind]").forEach(btn => {
+  btn.addEventListener("click", () => {
+    sheetKind = btn.dataset.kind;
+    syncSheetKindChips();
+  });
+});
+
 document.querySelector("#sheet-favorites-only").addEventListener("click", (e) => {
   sheetFavoritesOnly = !sheetFavoritesOnly;
   e.currentTarget.classList.toggle("active", sheetFavoritesOnly);
@@ -924,8 +997,10 @@ document.querySelector("#sheet-clear").addEventListener("click", () => {
   sheetChannel = "";
   sheetSort = "created_at";
   sheetFavoritesOnly = false;
+  sheetKind = "";
   currentTags = [];
   renderSheetChannelChips();
+  syncSheetKindChips();
   document.querySelectorAll("#filter-sheet [data-sort]").forEach(btn => btn.classList.toggle("active", btn.dataset.sort === sheetSort));
   document.querySelector("#sheet-favorites-only").classList.remove("active");
 });
@@ -933,6 +1008,7 @@ document.querySelector("#sheet-clear").addEventListener("click", () => {
 document.querySelector("#sheet-apply").addEventListener("click", () => {
   currentChannel = sheetChannel;
   currentFavoritesOnly = sheetFavoritesOnly;
+  currentKind = sheetKind;
   localStorage.setItem(SORT_KEY, sheetSort);
   closeFilterSheet();
   loadList();

@@ -23,6 +23,7 @@ create table if not exists episodes (
   provenance      jsonb default '{}'::jsonb,       -- 各階段的模型與版本
   transcript_text text,                            -- 攤平的純文字，供內文搜尋
   chapters        jsonb not null default '[]'::jsonb, -- [{"start": 秒數, "title": "..."}]
+  cover           jsonb,                           -- {"svg": 48x48 線條插圖的內部元素, "color": "#rrggbb"}
   created_at      timestamptz default now(),       -- 上傳時間
   updated_at      timestamptz default now()
 );
@@ -30,6 +31,10 @@ create table if not exists episodes (
 -- 章節（2026-10-06 新增）：既有資料庫的 create table 不會補欄位，以此補上。
 -- start 等於 transcript 中某一段的 start，前端以此定位段落；文章與舊集數為空陣列。
 alter table episodes add column if not exists chapters jsonb not null default '[]'::jsonb;
+
+-- 內容封面（2026-10-07 新增）：摘要模型依內容畫的線條插圖，不含文字。
+-- svg 只含白名單內的繪圖元素，線條與填色一律 currentColor，由前端依 color 上色；舊集數為 null。
+alter table episodes add column if not exists cover jsonb;
 
 create index if not exists episodes_guid_idx on episodes (episode_guid);
 create index if not exists episodes_published_idx on episodes (published_at desc);

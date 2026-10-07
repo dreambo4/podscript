@@ -36,7 +36,7 @@
 <meta name="twitter:description" content="Podcast 逐字稿工具：分角色逐字稿、摘要、心智圖">
 <meta name="twitter:image" content="icons/og-image.png">
 
-<link rel="stylesheet" href="style.css?v=f1c7ed6e5adf">
+<link rel="stylesheet" href="style.css?v=e6821b8066b9">
 <script src="config.js"></script>
 </head>
 <body>
@@ -75,6 +75,14 @@
     <symbol id="ic-transcript" viewBox="0 0 24 24">
       <path d="M5 4.5h11l3 3V19a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V5.5a1 1 0 0 1 1-1Z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>
       <path d="M8 10h8M8 13.5h8M8 17h5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+    </symbol>
+    <symbol id="ic-audio" viewBox="0 0 24 24">
+      <path d="M4.5 15v-2.5a7.5 7.5 0 0 1 15 0V15" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+      <path d="M4.5 14.5h2a1.2 1.2 0 0 1 1.2 1.2v3.1a1.2 1.2 0 0 1-1.2 1.2h-.8a1.2 1.2 0 0 1-1.2-1.2zM19.5 14.5h-2a1.2 1.2 0 0 0-1.2 1.2v3.1a1.2 1.2 0 0 0 1.2 1.2h.8a1.2 1.2 0 0 0 1.2-1.2z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>
+    </symbol>
+    <symbol id="ic-video" viewBox="0 0 24 24">
+      <rect x="3.5" y="5.5" width="17" height="13" rx="3" fill="none" stroke="currentColor" stroke-width="1.6"/>
+      <path d="M10.3 9.4v5.2l4.4-2.6z" fill="currentColor" stroke="currentColor" stroke-width="1" stroke-linejoin="round"/>
     </symbol>
     <symbol id="ic-article" viewBox="0 0 24 24">
       <path d="M16.5 19H5a1.5 1.5 0 0 1-1.5-1.5V5.5a1 1 0 0 1 1-1h11a1 1 0 0 1 1 1V17.5a1.5 1.5 0 0 0 3 0V9h-3" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>
@@ -326,6 +334,16 @@
     </div>
 
     <div class="sheet-group">
+      <span class="sheet-label">類型</span>
+      <div class="sheet-chips">
+        <button type="button" class="sheet-chip" data-kind="">全部</button>
+        <button type="button" class="sheet-chip" data-kind="audio"><svg class="icon icon-xs"><use href="#ic-audio"/></svg> 音檔</button>
+        <button type="button" class="sheet-chip" data-kind="video"><svg class="icon icon-xs"><use href="#ic-video"/></svg> 影片</button>
+        <button type="button" class="sheet-chip" data-kind="article"><svg class="icon icon-xs"><use href="#ic-article"/></svg> 文章</button>
+      </div>
+    </div>
+
+    <div class="sheet-group">
       <span class="sheet-label">排序依據</span>
       <div class="sheet-chips">
         <button type="button" class="sheet-chip" data-sort="created_at">建檔日期</button>
@@ -374,7 +392,7 @@
   // markmap 從 CDN 載入，可能晚於詳情頁資料到達；通知 app.js 補畫。
   window.dispatchEvent(new Event("markmap-ready"));
 </script>
-<script src="app.js?v=7a95505b4c1c"></script>
+<script src="app.js?v=aef75a9c38d2"></script>
 <script src="https://accounts.google.com/gsi/client" async defer onload="initGoogleSignIn()"></script>
 </body>
 </html>

@@ -23,7 +23,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from . import audio, notify, pipeline, upload
-from .resolvers import ResolveError, article, is_media_url, resolve
+from .resolvers import ResolveError, article, is_media_url, platform_of, resolve
 from .summary import SummaryError
 
 # 模型、摘要與資料庫設定皆來自 .env，須在建立 app 前載入。
@@ -394,6 +394,9 @@ def _episode_summary(
         "published_at": episode.to_dict()["published_at"] if episode else None,
         "created_at": job.started_at if job else "",
         "duration_sec": episode.duration_sec if episode else None,
+        # 處理中尚未取得節目資訊時，依任務網址判斷平台
+        "platform": episode.platform if episode else (platform_of(job.url) if job and job.url else None),
+        "cover": summary_data.get("cover"),
         "kind": "article"
         if (episode and pipeline.is_article(episode)) or (job and job.kind == "article")
         else "podcast",
@@ -547,6 +550,30 @@ def add_chapters(guid: str) -> dict:
         except upload.UploadError as exc:
             raise HTTPException(status_code=502, detail=str(exc)) from exc
     return {"chapters": chapters}
+
+
+@app.post("/api/episodes/{guid}/cover")
+def regenerate_cover(guid: str) -> dict:
+    """只重畫封面，摘要、心智圖、標籤與章節不變。依標題、摘要與標籤畫，不讀逐字稿。
+
+    本機有摘要檔時寫入摘要檔；已上傳的單集同時寫回資料庫，
+    與補章節相同，不需再按「再次上傳」。
+    """
+    result, summary_data, _from_db = _load_episode(guid)
+    if not summary_data.get("summary"):
+        raise HTTPException(status_code=400, detail="請先產生摘要")
+
+    try:
+        cover = pipeline.regenerate_cover(_episode_dir(guid), result, summary_data)
+    except SummaryError as exc:
+        raise HTTPException(status_code=502, detail=f"封面生成失敗：{exc}") from exc
+
+    if upload.uploaded_at(guid):
+        try:
+            upload.update_episode(guid, cover=cover)
+        except upload.UploadError as exc:
+            raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return {"cover": cover}
 
 
 @app.put("/api/episodes/{guid}/hashtags")

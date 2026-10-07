@@ -15,13 +15,13 @@ TAG_MODE_OPERATORS = {
 
 LIST_COLUMNS = """
     e.id, e.episode_guid, e.podcast_name, e.title, e.published_at, e.created_at,
-    e.duration_sec, e.hashtags, (f.episode_id is not null) as is_favorite, e.platform
+    e.duration_sec, e.hashtags, (f.episode_id is not null) as is_favorite, e.platform, e.cover
 """
 
 DETAIL_COLUMNS = """
     e.id, e.episode_guid, e.podcast_name, e.title, e.published_at, e.duration_sec,
     e.summary, e.mindmap_mermaid, e.hashtags, e.transcript, e.speakers, e.provenance,
-    (f.episode_id is not null) as is_favorite, e.platform, e.source_url, e.chapters
+    (f.episode_id is not null) as is_favorite, e.platform, e.source_url, e.chapters, e.cover
 """
 
 FAVORITE_JOIN = "left join favorites f on f.episode_id = e.id and f.user_id = %s"
@@ -60,6 +60,13 @@ WORD_CHAR = re.compile(r"[A-Za-z0-9_]")
 NOT_WORD_BEFORE = "(?<![A-Za-z0-9_])"
 NOT_WORD_AFTER = "(?![A-Za-z0-9_])"
 
+# 類型篩選：YouTube 為影片、文章為文章，其餘平台皆視為音檔
+KIND_CONDITIONS = {
+    "audio": "coalesce(e.platform, '') not in ('youtube', 'article')",
+    "video": "e.platform = 'youtube'",
+    "article": "e.platform = 'article'",
+}
+
 SORT_COLUMNS = {
     "created_at": "created_at",
     "published_at": "published_at",
@@ -78,6 +85,7 @@ def _row_to_summary(row: tuple) -> dict:
         "hashtags": row[7] or [],
         "is_favorite": row[8],
         "platform": row[9],
+        "cover": row[10],
         "snippet": None,
         "match_count": 0,
     }
@@ -86,7 +94,7 @@ def _row_to_summary(row: tuple) -> dict:
 def _row_to_match(row: tuple) -> dict:
     """LIST_COLUMNS 之後接 MATCH_COLUMNS 的列；只命中標題時 snippet 為 None。"""
     item = _row_to_summary(row)
-    snippet, cut_start, cut_end, match_count = row[10:14]
+    snippet, cut_start, cut_end, match_count = row[11:15]
     if snippet:
         item["snippet"] = ("…" if cut_start else "") + snippet + ("…" if cut_end else "")
     item["match_count"] = match_count
@@ -122,6 +130,9 @@ def list_episodes(
     tags: list[str] | None = Query(None, description="依多個標籤篩選，搭配 tag_mode"),
     tag_mode: Literal["all", "any"] = Query("all", description="all=須同時包含全部標籤，any=符合任一標籤"),
     channel: str | None = Query(None, description="依頻道（podcast_name）篩選"),
+    kind: Literal["audio", "video", "article"] | None = Query(
+        None, description="依類型篩選：audio=音檔（YouTube 與文章以外）、video=影片（YouTube）、article=文章"
+    ),
     case_sensitive: bool = Query(False, description="搜尋時大小寫須相符"),
     whole_word: bool = Query(False, description="搜尋時全字拼寫須相符（字只算英數與底線）"),
     favorites_only: bool = Query(False, description="只列出目前使用者收藏的集數"),
@@ -156,6 +167,9 @@ def list_episodes(
     if channel:
         where.append("e.podcast_name = %s")
         params.append(channel)
+
+    if kind:
+        where.append(KIND_CONDITIONS[kind])
 
     if favorites_only:
         where.append("f.episode_id is not null")
@@ -234,6 +248,7 @@ def get_episode(guid: str, user: dict = Depends(get_current_user)) -> dict:
         "platform": row[13],
         "source_url": row[14],
         "chapters": row[15] or [],
+        "cover": row[16],
     }
 
 
