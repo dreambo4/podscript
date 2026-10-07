@@ -60,9 +60,12 @@ self.addEventListener("fetch", (event) => {
 
   // 導覽請求（開啟 App／重新整理）：優先走網路取得最新版，
   // 離線時退回快取的 index.html，這是 standalone 模式下不變白畫面的關鍵。
+  // cache: "no-cache" 要求向伺服器確認，不直接用瀏覽器 HTTP 快取裡的 index.html；
+  // index.html 內含各資源的版本號，拿到舊的就會載入整套舊版。
+  // navigate 模式的 Request 不能帶 RequestInit，故以網址重新發出。
   if (request.mode === "navigate") {
     event.respondWith(
-      fetch(request)
+      fetch(request.url, { cache: "no-cache", credentials: "same-origin" })
         .then((response) => {
           const copy = response.clone();
           caches.open(CACHE_VERSION).then((cache) => cache.put("./index.html", copy));
