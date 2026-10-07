@@ -63,18 +63,19 @@ def resolve_url(url: str) -> Article:
             "擷取到的正文太短，可能是付費文章或需要登入，可改用「貼上全文」"
         )
 
-    title = _clean_title(document.title or "") or paragraphs[0][:40]
+    host = urlsplit(url).hostname or ""
+    title, sitename = _title_and_site(document.title or "", document.sitename or "", host)
+    title = title or paragraphs[0][:40]
     # 正文第一段常是重複的標題
     if paragraphs[0] == title:
         paragraphs = paragraphs[1:]
 
-    host = urlsplit(url).hostname or ""
     canonical = normalize_url(url)
     episode = Episode(
         platform=PLATFORM,
         source_url=canonical,
         episode_guid=_guid(canonical),
-        podcast_name=(document.sitename or "").strip() or _bare_host(host),
+        podcast_name=sitename,
         title=title,
         mp3_url="",
         published_at=_parse_date(document.date),
@@ -131,9 +132,44 @@ def _guid(key: str) -> str:
     return "article-" + hashlib.sha1(key.encode("utf-8")).hexdigest()[:16]
 
 
-def _clean_title(title: str) -> str:
-    """去掉網頁標題後綴的分類與站名，如「標題 | 兩岸 | 中央社 CNA」。"""
-    return re.split(r"\s+[|｜]\s+", title.strip())[0].strip()
+# 以破折號接在標題後的站名長度上限；超過視為標題本身的一部分。
+MAX_TITLE_SITE_CHARS = 20
+
+
+def _title_and_site(raw_title: str, sitename: str, host: str) -> tuple[str, str]:
+    """去掉網頁標題後綴的分類與站名，並決定媒體名稱。
+
+    標題後綴有兩種寫法：「標題 | 兩岸 | 中央社 CNA」取第一段；
+    「標題 - 報導者 The Reporter」只切最後一個破折號。
+    網頁沒有 og:site_name 時 trafilatura 的 sitename 只是網域，
+    此時改用標題後綴的站名；也沒有就用網域。
+
+    Returns:
+        (標題, 媒體名稱)。
+    """
+    title = raw_title.strip()
+    sitename = sitename.strip()
+    if not sitename or _is_host(sitename, host):
+        sitename = ""
+
+    suffix = ""
+    parts = re.split(r"\s+[|｜]\s+", title)
+    if len(parts) > 1:
+        title, suffix = parts[0].strip(), parts[-1].strip()
+    else:
+        dashed = re.match(r"^(.*\S)\s+[-–—]\s+([^-–—]+)$", title)
+        # 有真正站名時，破折號後綴要與站名相同才切，避免切到標題本身的「A - B」
+        if dashed and len(dashed.group(2).strip()) <= MAX_TITLE_SITE_CHARS and (
+            not sitename or dashed.group(2).strip() == sitename
+        ):
+            title, suffix = dashed.group(1).strip(), dashed.group(2).strip()
+
+    return title, sitename or suffix or _bare_host(host)
+
+
+def _is_host(name: str, host: str) -> bool:
+    """trafilatura 抓不到站名時會以網域代替，如 twreporter.org。"""
+    return name.lower() in {host.lower(), _bare_host(host).lower()}
 
 
 def _split_paragraphs(text: str) -> list[str]:
