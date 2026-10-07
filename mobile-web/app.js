@@ -329,6 +329,8 @@ function groupByYearMonth(episodes, sortField) {
 // 把手位置 = 目前捲動量在「第一個分組 ~ 頁尾」之間的比例；拖曳把手時反向換算成捲動量。
 // 目前年月以一條「判斷線」決定：平常貼齊畫面頂端，進入最後一個畫面高度的捲動量後
 // 逐漸移到畫面底部，因此捲不到頂端的末段分組在拖到底時仍會被選到。年份刻度用同一套換算。
+// 拖曳期間把手直接跟著手指，換算基準（geo）在按下時固定，
+// 不受 Safari 網址列伸縮造成的視窗高度變化影響。
 // 多於一個年月分組才啟用。
 const SCRUBBER_HIDE_DELAY = 1500;
 const SCRUBBER_YEAR_MIN_GAP = 26; // 年份標籤間距小於此值（px）時略過，避免互相重疊
@@ -338,7 +340,8 @@ const scrubber = {
   enabled: false,
   dragging: false,
   hideTimer: null,
-  sections: [], // 拖曳開始時快取 [{ key, top }]，top 為該分組捲到頂端時的 scrollY
+  geo: null,     // 拖曳期間固定的換算基準，見 measureScrubberGeo
+  sections: [],  // 拖曳開始時快取 [{ key, top }]，top 為該分組捲到頂端時的 scrollY
 };
 
 function scrubberEl() { return document.querySelector("#scrubber"); }
@@ -347,46 +350,41 @@ function scrubberStickyOffset() {
   return document.querySelector(".topbar")?.getBoundingClientRect().bottom ?? 0;
 }
 
-// 可捲動區間：第一個分組捲到頂端 ~ 頁尾
-function scrubberRange() {
+// start ~ end：第一個分組捲到頂端 ~ 頁尾的捲動量；travel：判斷線從頂端移到底部的最大位移；
+// track：把手可移動的高度
+function measureScrubberGeo() {
+  const el = scrubberEl();
+  const offset = scrubberStickyOffset();
   const first = document.querySelector("#episode-groups > section");
-  const start = first ? first.getBoundingClientRect().top + window.scrollY - scrubberStickyOffset() : 0;
+  const start = first ? first.getBoundingClientRect().top + window.scrollY - offset : 0;
   const end = document.documentElement.scrollHeight - window.innerHeight;
-  return { start, end };
+  const travel = Math.max(0, window.innerHeight - offset - SCRUBBER_HEADING_ROOM);
+  const track = el.clientHeight - el.querySelector(".scrubber-thumb").offsetHeight;
+  return { start, end, travel, track };
 }
 
 function scrubberRatio(scrollY, { start, end }) {
   return end > start ? Math.min(1, Math.max(0, (scrollY - start) / (end - start))) : 0;
 }
 
-// 判斷線從畫面頂端移到底部的最大位移
-function scrubberLineTravel() {
-  return Math.max(0, window.innerHeight - scrubberStickyOffset() - SCRUBBER_HEADING_ROOM);
-}
-
 // 判斷線開始往下移的捲動量
-function scrubberTailStart({ start, end }) {
-  return Math.max(start, end - scrubberLineTravel());
+function scrubberTailStart({ start, end, travel }) {
+  return Math.max(start, end - travel);
 }
 
 // 捲動量 scrollY 對應的判斷線位置（與 section.top 同一座標）
-function scrubberLineAt(scrollY, range) {
-  const tail = scrubberTailStart(range);
-  if (scrollY <= tail || range.end <= tail) return scrollY;
-  return scrollY + scrubberLineTravel() * Math.min(1, (scrollY - tail) / (range.end - tail));
+function scrubberLineAt(scrollY, geo) {
+  const tail = scrubberTailStart(geo);
+  if (scrollY <= tail || geo.end <= tail) return scrollY;
+  return scrollY + geo.travel * Math.min(1, (scrollY - tail) / (geo.end - tail));
 }
 
 // scrubberLineAt 的反函數：判斷線剛好碰到 top 時的捲動量
-function scrubberScrollForLine(top, range) {
-  const tail = scrubberTailStart(range);
-  if (top <= tail || range.end <= tail) return top;
-  const tailLen = range.end - tail;
-  return Math.min(range.end, (top * tailLen + scrubberLineTravel() * tail) / (tailLen + scrubberLineTravel()));
-}
-
-function scrubberTrackHeight() {
-  const el = scrubberEl();
-  return el.clientHeight - el.querySelector(".scrubber-thumb").offsetHeight;
+function scrubberScrollForLine(top, geo) {
+  const tail = scrubberTailStart(geo);
+  if (top <= tail || geo.end <= tail) return top;
+  const tailLen = geo.end - tail;
+  return Math.min(geo.end, (top * tailLen + geo.travel * tail) / (tailLen + geo.travel));
 }
 
 function renderScrubber(groupKeys) {
@@ -396,9 +394,8 @@ function renderScrubber(groupKeys) {
   el.classList.remove("visible", "dragging");
 }
 
-function updateScrubberThumb() {
-  const ratio = scrubberRatio(window.scrollY, scrubberRange());
-  scrubberEl().querySelector(".scrubber-thumb").style.transform = `translateY(${ratio * scrubberTrackHeight()}px)`;
+function setScrubberThumb(ratio, geo) {
+  scrubberEl().querySelector(".scrubber-thumb").style.transform = `translateY(${ratio * geo.track}px)`;
 }
 
 function cacheScrubberSections() {
@@ -413,9 +410,7 @@ function scrubberLabelFor(key) {
   return key === "unknown" ? "日期不明" : YEAR_MONTH_LABEL(...key.split("-").map(Number));
 }
 
-function renderScrubberYears() {
-  const range = scrubberRange();
-  const track = scrubberTrackHeight();
+function renderScrubberYears(geo) {
   const thumbHalf = scrubberEl().querySelector(".scrubber-thumb").offsetHeight / 2;
   const seen = new Set();
   let lastY = -Infinity;
@@ -427,8 +422,8 @@ function renderScrubberYears() {
     if (seen.has(year)) return;
     seen.add(year);
 
-    const ratio = scrubberRatio(scrubberScrollForLine(top, range), range);
-    const y = ratio * track + thumbHalf;
+    const ratio = scrubberRatio(scrubberScrollForLine(top, geo), geo);
+    const y = ratio * geo.track + thumbHalf;
     if (y - lastY < SCRUBBER_YEAR_MIN_GAP) return;
     lastY = y;
     html.push(`<span class="scrubber-year" style="top:${y}px">${year}年</span>`);
@@ -437,8 +432,8 @@ function renderScrubberYears() {
   scrubberEl().querySelector(".scrubber-years").innerHTML = html.join("");
 }
 
-function updateScrubberBubble() {
-  const line = scrubberLineAt(window.scrollY, scrubberRange());
+function updateScrubberBubble(scrollY, geo) {
+  const line = scrubberLineAt(scrollY, geo);
   let current = scrubber.sections[0];
   for (const section of scrubber.sections) {
     if (section.top <= line + 1) current = section;
@@ -472,39 +467,59 @@ function bindScrubberDrag() {
 
   const thumb = el.querySelector(".scrubber-thumb");
   let grabOffset = 0; // 手指按下處距把手頂端的距離，拖曳時維持不變，把手才不會跳
+  let trackTop = 0;   // 按下時軌道頂端的 clientY
+  let pendingScrollY = null;
 
   window.addEventListener("scroll", () => {
+    // 拖曳中由手指決定把手與泡泡，捲動事件不回頭改它們，避免互相拉扯
+    if (scrubber.dragging) return;
     if (!scrubber.enabled || document.querySelector("#list-view").hidden) return;
-    const { start, end } = scrubberRange();
-    if (end <= start) return;
-    updateScrubberThumb();
-    if (scrubber.dragging) updateScrubberBubble();
-    else showScrubberBriefly();
+    const geo = measureScrubberGeo();
+    if (geo.end <= geo.start) return;
+    setScrubberThumb(scrubberRatio(window.scrollY, geo), geo);
+    showScrubberBriefly();
   }, { passive: true });
+
+  // iOS Safari 對 touch-action 支援不完整，手指在把手上移動時仍可能觸發原生捲動，需在此擋掉
+  thumb.addEventListener("touchstart", e => e.preventDefault(), { passive: false });
+  thumb.addEventListener("touchmove", e => e.preventDefault(), { passive: false });
 
   thumb.addEventListener("pointerdown", (e) => {
     e.preventDefault();
     thumb.setPointerCapture(e.pointerId);
     scrubber.dragging = true;
+    scrubber.geo = measureScrubberGeo();
     grabOffset = e.clientY - thumb.getBoundingClientRect().top;
+    trackTop = el.getBoundingClientRect().top;
     cacheScrubberSections();
-    renderScrubberYears();
-    updateScrubberBubble();
+    renderScrubberYears(scrubber.geo);
+    updateScrubberBubble(window.scrollY, scrubber.geo);
     el.classList.add("dragging");
     clearTimeout(scrubber.hideTimer);
   });
 
   thumb.addEventListener("pointermove", (e) => {
     if (!scrubber.dragging) return;
-    const y = e.clientY - grabOffset - el.getBoundingClientRect().top;
-    const ratio = Math.min(1, Math.max(0, y / scrubberTrackHeight()));
-    const { start, end } = scrubberRange();
-    window.scrollTo(0, start + ratio * (end - start));
+    const geo = scrubber.geo;
+    const ratio = geo.track > 0 ? Math.min(1, Math.max(0, (e.clientY - grabOffset - trackTop) / geo.track)) : 0;
+    const scrollY = geo.start + ratio * (geo.end - geo.start);
+    setScrubberThumb(ratio, geo);
+    updateScrubberBubble(scrollY, geo);
+
+    // 同一畫格內只捲動一次
+    if (pendingScrollY === null) {
+      requestAnimationFrame(() => {
+        window.scrollTo(0, pendingScrollY);
+        pendingScrollY = null;
+      });
+    }
+    pendingScrollY = scrollY;
   });
 
   const endDrag = () => {
     if (!scrubber.dragging) return;
     scrubber.dragging = false;
+    scrubber.geo = null;
     el.classList.remove("dragging");
     showScrubberBriefly();
   };
