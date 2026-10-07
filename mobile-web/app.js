@@ -1254,6 +1254,8 @@ function mindmapRootColor() {
 }
 
 // 頁面內是唯讀縮圖：不攔手勢，手指滑過去照常捲頁面；要拖曳縮放時點進全螢幕。
+let mindmapNeedsRedraw = false;
+
 function renderMindmap() {
   const wrap = document.querySelector("#mindmap-wrap");
   const empty = document.querySelector("#mindmap-empty");
@@ -1267,6 +1269,8 @@ function renderMindmap() {
   }
   window.renderMarkmap(currentMindmapCode, document.querySelector("#mindmap"),
     { rootColor: mindmapRootColor(), interactive: false });
+  // 摘要分頁隱藏時容器沒有尺寸，無法置中；切回摘要分頁時要重畫
+  mindmapNeedsRedraw = !document.querySelector("#sub-summary").classList.contains("active");
   if (fullMindmap) openMindmapFull(); // 全螢幕中切換主題時一併重繪
 }
 
@@ -1330,15 +1334,28 @@ async function loadDetail(guid, query = "", options = {}) {
   setDetailFavoriteIcon(ep.is_favorite);
 
   currentMindmapCode = ep.mindmap_mermaid || null;
+  mindmapNeedsRedraw = false; // 下一行接著會畫這一集的心智圖，不必重畫上一集留下的
+  selectSubtab(savedSubtab());
   await renderMindmap();
 
-  selectSubtab("summary");
   if (!showHits(ep, query, options)) renderTranscript(ep);
+}
+
+// 使用者手動切換的分頁會記住，下次開單集時直接顯示；從搜尋結果進來切到逐字稿不算
+const SUBTAB_KEY = "podscript_subtab";
+
+function savedSubtab() {
+  try {
+    return localStorage.getItem(SUBTAB_KEY) === "transcript" ? "transcript" : "summary";
+  } catch {
+    return "summary";
+  }
 }
 
 function selectSubtab(name) {
   document.querySelectorAll(".subtab").forEach(t => t.classList.toggle("active", t.dataset.sub === name));
   document.querySelectorAll(".subpanel").forEach(p => p.classList.toggle("active", p.id === `sub-${name}`));
+  if (name === "summary" && mindmapNeedsRedraw && currentMindmapCode) renderMindmap();
 }
 
 document.querySelector("#btn-favorite-detail").addEventListener("click", async (e) => {
@@ -1354,7 +1371,10 @@ document.querySelector("#btn-favorite-detail").addEventListener("click", async (
 });
 
 document.querySelectorAll(".subtab").forEach(tab => {
-  tab.addEventListener("click", () => selectSubtab(tab.dataset.sub));
+  tab.addEventListener("click", () => {
+    selectSubtab(tab.dataset.sub);
+    try { localStorage.setItem(SUBTAB_KEY, tab.dataset.sub); } catch { /* 存不了只是下次不記得 */ }
+  });
 });
 
 // ── 路由 ──────────────────────────────────────────
