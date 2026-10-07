@@ -325,160 +325,147 @@ function groupByYearMonth(episodes, sortField) {
   return groups;
 }
 
-// ── 日期快速捲動（仿 Google 相簿）────────────────────
-// 把手位置 = 目前捲動量在「第一個分組 ~ 頁尾」之間的比例；拖曳把手時反向換算成捲動量。
-// 目前年月以一條「判斷線」決定：平常貼齊畫面頂端，進入最後一個畫面高度的捲動量後
-// 逐漸移到畫面底部，因此捲不到頂端的末段分組在拖到底時仍會被選到。年份刻度用同一套換算。
+// ── 快速捲動把手（仿 Google 相簿）────────────────────
+// 列表（依年月）與逐字稿（依章節）共用。
+// 把手位置 = 目前捲動量在「第一個區段 ~ 頁尾」之間的比例；拖曳把手時反向換算成捲動量。
+// 目前區段以一條「判斷線」決定：平常貼齊畫面頂端（固定標題下方），進入最後一個畫面高度的
+// 捲動量後逐漸移到畫面底部，因此捲不到頂端的末段區段在拖到底時仍會被選到。軌道刻度用同一套換算。
 // 拖曳期間把手直接跟著手指，換算基準（geo）在按下時固定；頁面不捲動，
-// 以 transform 位移列表內容預覽，放開時才捲到目的地。
-// 多於一個年月分組才啟用。
+// 以 transform 位移內容預覽，放開時才捲到目的地。
 const SCRUBBER_HIDE_DELAY = 1500;
-const SCRUBBER_YEAR_MIN_GAP = 26; // 年份標籤間距小於此值（px）時略過，避免互相重疊
-const SCRUBBER_HEADING_ROOM = 48; // 判斷線在畫面底部時保留的高度，讓該組標題仍在畫面內
+const SCRUBBER_LABEL_MIN_GAP = 26; // 軌道刻度間距小於此值（px）時略過，避免互相重疊
+const SCRUBBER_HEADING_ROOM = 48;  // 判斷線在畫面底部時保留的高度，讓該區段標題仍在畫面內
 
-const scrubber = {
-  enabled: false,
-  dragging: false,
-  hideTimer: null,
-  geo: null,     // 拖曳期間固定的換算基準，見 measureScrubberGeo
-  sections: [],  // 拖曳開始時快取 [{ key, top }]，top 為該分組捲到頂端時的 scrollY
-};
-
-function scrubberEl() { return document.querySelector("#scrubber"); }
-
-function scrubberStickyOffset() {
-  return document.querySelector(".topbar")?.getBoundingClientRect().bottom ?? 0;
-}
-
-// start ~ end：第一個分組捲到頂端 ~ 頁尾的捲動量；travel：判斷線從頂端移到底部的最大位移；
-// track：把手可移動的高度
-function measureScrubberGeo() {
-  const el = scrubberEl();
-  const offset = scrubberStickyOffset();
-  const first = document.querySelector("#episode-groups > section");
-  const start = first ? first.getBoundingClientRect().top + window.scrollY - offset : 0;
-  const end = document.documentElement.scrollHeight - window.innerHeight;
-  const travel = Math.max(0, window.innerHeight - offset - SCRUBBER_HEADING_ROOM);
-  const track = el.clientHeight - el.querySelector(".scrubber-thumb").offsetHeight;
-  return { start, end, travel, track };
-}
-
-function scrubberRatio(scrollY, { start, end }) {
-  return end > start ? Math.min(1, Math.max(0, (scrollY - start) / (end - start))) : 0;
-}
-
-// 判斷線開始往下移的捲動量
-function scrubberTailStart({ start, end, travel }) {
-  return Math.max(start, end - travel);
-}
-
-// 捲動量 scrollY 對應的判斷線位置（與 section.top 同一座標）
-function scrubberLineAt(scrollY, geo) {
-  const tail = scrubberTailStart(geo);
-  if (scrollY <= tail || geo.end <= tail) return scrollY;
-  return scrollY + geo.travel * Math.min(1, (scrollY - tail) / (geo.end - tail));
-}
-
-// scrubberLineAt 的反函數：判斷線剛好碰到 top 時的捲動量
-function scrubberScrollForLine(top, geo) {
-  const tail = scrubberTailStart(geo);
-  if (top <= tail || geo.end <= tail) return top;
-  const tailLen = geo.end - tail;
-  return Math.min(geo.end, (top * tailLen + geo.travel * tail) / (tailLen + geo.travel));
-}
-
-function renderScrubber(groupKeys) {
-  const el = scrubberEl();
-  scrubber.enabled = groupKeys.length > 1;
-  el.hidden = !scrubber.enabled;
-  el.classList.remove("visible", "dragging");
-}
-
-function setScrubberThumb(ratio, geo) {
-  scrubberEl().querySelector(".scrubber-thumb").style.transform = `translateY(${ratio * geo.track}px)`;
-}
-
-function cacheScrubberSections() {
-  const offset = scrubberStickyOffset();
-  scrubber.sections = [...document.querySelectorAll("#episode-groups > section")].map(section => ({
-    key: section.dataset.group,
-    top: section.getBoundingClientRect().top + window.scrollY - offset,
-  }));
-}
-
-function scrubberLabelFor(key) {
-  return key === "unknown" ? "日期不明" : YEAR_MONTH_LABEL(...key.split("-").map(Number));
-}
-
-function renderScrubberYears(geo) {
-  const thumbHalf = scrubberEl().querySelector(".scrubber-thumb").offsetHeight / 2;
-  const seen = new Set();
-  let lastY = -Infinity;
-  const html = [];
-
-  scrubber.sections.forEach(({ key, top }) => {
-    if (key === "unknown") return;
-    const year = key.slice(0, 4);
-    if (seen.has(year)) return;
-    seen.add(year);
-
-    const ratio = scrubberRatio(scrubberScrollForLine(top, geo), geo);
-    const y = ratio * geo.track + thumbHalf;
-    if (y - lastY < SCRUBBER_YEAR_MIN_GAP) return;
-    lastY = y;
-    html.push(`<span class="scrubber-year" style="top:${y}px">${year}年</span>`);
-  });
-
-  scrubberEl().querySelector(".scrubber-years").innerHTML = html.join("");
-}
-
-function updateScrubberBubble(scrollY, geo) {
-  const line = scrubberLineAt(scrollY, geo);
-  let current = scrubber.sections[0];
-  for (const section of scrubber.sections) {
-    if (section.top <= line + 1) current = section;
-    else break;
-  }
-  const el = scrubberEl();
-  const bubble = el.querySelector(".scrubber-bubble");
-  bubble.textContent = current ? scrubberLabelFor(current.key) : "";
-
-  // 與目前年月泡泡垂直重疊的年份標籤先隱藏，避免文字疊在一起
-  const bubbleRect = bubble.getBoundingClientRect();
-  el.querySelectorAll(".scrubber-year").forEach(year => {
-    const rect = year.getBoundingClientRect();
-    year.classList.toggle("covered", rect.bottom > bubbleRect.top - 4 && rect.top < bubbleRect.bottom + 4);
-  });
-}
-
-function showScrubberBriefly() {
-  const el = scrubberEl();
-  el.classList.add("visible");
-  clearTimeout(scrubber.hideTimer);
-  scrubber.hideTimer = setTimeout(() => {
-    if (!scrubber.dragging) el.classList.remove("visible");
-  }, SCRUBBER_HIDE_DELAY);
-}
-
-function bindScrubberDrag() {
-  const el = scrubberEl();
-  if (el.dataset.bound) return;
-  el.dataset.bound = "1";
-
+/**
+ * @param {object} config
+ * @param {HTMLElement} config.el            把手容器（.scrubber）
+ * @param {string} config.sectionSelector    可跳轉的區段，依文件順序
+ * @param {(section: HTMLElement) => string} config.bubbleLabel  拖曳時把手旁顯示的文字
+ * @param {(section: HTMLElement) => string|null} config.trackLabel  軌道刻度文字；與前一個刻度相同或為 null 時不顯示
+ * @param {() => number} config.stickyOffset 區段捲到頂端時，其上方被固定元素佔去的高度（clientY）
+ * @param {string} config.movingSelector     拖曳期間以 transform 位移預覽的內容
+ */
+function createScrubber(config) {
+  const { el } = config;
   const thumb = el.querySelector(".scrubber-thumb");
+  const bubble = el.querySelector(".scrubber-bubble");
+  const labelsEl = el.querySelector(".scrubber-years");
+  const state = {
+    enabled: false,
+    dragging: false,
+    hideTimer: null,
+    geo: null,      // 拖曳期間固定的換算基準，見 measureGeo
+    sections: [],   // 拖曳開始時快取 [{ top, bubble, track }]，top 為該區段捲到頂端時的 scrollY
+  };
+
+  // start ~ end：第一個區段捲到頂端 ~ 頁尾的捲動量；travel：判斷線從頂端移到底部的最大位移；
+  // track：把手可移動的高度
+  function measureGeo() {
+    const offset = config.stickyOffset();
+    const first = document.querySelector(config.sectionSelector);
+    const start = first ? first.getBoundingClientRect().top + window.scrollY - offset : 0;
+    const end = document.documentElement.scrollHeight - window.innerHeight;
+    const travel = Math.max(0, window.innerHeight - offset - SCRUBBER_HEADING_ROOM);
+    const track = el.clientHeight - thumb.offsetHeight;
+    return { start, end, travel, track };
+  }
+
+  function ratioOf(scrollY, { start, end }) {
+    return end > start ? Math.min(1, Math.max(0, (scrollY - start) / (end - start))) : 0;
+  }
+
+  // 判斷線開始往下移的捲動量
+  function tailStart({ start, end, travel }) {
+    return Math.max(start, end - travel);
+  }
+
+  // 捲動量 scrollY 對應的判斷線位置（與 section.top 同一座標）
+  function lineAt(scrollY, geo) {
+    const tail = tailStart(geo);
+    if (scrollY <= tail || geo.end <= tail) return scrollY;
+    return scrollY + geo.travel * Math.min(1, (scrollY - tail) / (geo.end - tail));
+  }
+
+  // lineAt 的反函數：判斷線剛好碰到 top 時的捲動量
+  function scrollForLine(top, geo) {
+    const tail = tailStart(geo);
+    if (top <= tail || geo.end <= tail) return top;
+    const tailLen = geo.end - tail;
+    return Math.min(geo.end, (top * tailLen + geo.travel * tail) / (tailLen + geo.travel));
+  }
+
+  function isShown() {
+    return state.enabled && el.getClientRects().length > 0;
+  }
+
+  function setThumb(ratio, geo) {
+    thumb.style.transform = `translateY(${ratio * geo.track}px)`;
+  }
+
+  function cacheSections() {
+    const offset = config.stickyOffset();
+    state.sections = [...document.querySelectorAll(config.sectionSelector)].map(section => ({
+      top: section.getBoundingClientRect().top + window.scrollY - offset,
+      bubble: config.bubbleLabel(section),
+      track: config.trackLabel(section),
+    }));
+  }
+
+  function renderTrackLabels(geo) {
+    const thumbHalf = thumb.offsetHeight / 2;
+    let lastText = null;
+    let lastY = -Infinity;
+    const html = [];
+
+    state.sections.forEach(({ top, track }) => {
+      if (!track || track === lastText) return;
+      lastText = track;
+      const y = ratioOf(scrollForLine(top, geo), geo) * geo.track + thumbHalf;
+      if (y - lastY < SCRUBBER_LABEL_MIN_GAP) return;
+      lastY = y;
+      html.push(`<span class="scrubber-year" style="top:${y}px">${escapeHtml(track)}</span>`);
+    });
+
+    labelsEl.innerHTML = html.join("");
+  }
+
+  function updateBubble(scrollY, geo) {
+    const line = lineAt(scrollY, geo);
+    let current = state.sections[0];
+    for (const section of state.sections) {
+      if (section.top <= line + 1) current = section;
+      else break;
+    }
+    bubble.textContent = current ? current.bubble : "";
+
+    // 與泡泡垂直重疊的刻度先隱藏，避免文字疊在一起
+    const bubbleRect = bubble.getBoundingClientRect();
+    labelsEl.querySelectorAll(".scrubber-year").forEach(label => {
+      const rect = label.getBoundingClientRect();
+      label.classList.toggle("covered", rect.bottom > bubbleRect.top - 4 && rect.top < bubbleRect.bottom + 4);
+    });
+  }
+
+  function showBriefly() {
+    el.classList.add("visible");
+    clearTimeout(state.hideTimer);
+    state.hideTimer = setTimeout(() => {
+      if (!state.dragging) el.classList.remove("visible");
+    }, SCRUBBER_HIDE_DELAY);
+  }
+
   let startClientY = 0;
   let startThumbY = 0;   // 按下時把手在軌道內的位置
   let startScrollY = 0;  // 按下時的捲動量，拖曳期間頁面維持在此
   let targetScrollY = 0; // 放開時要捲到的位置
-  let movingEls = [];    // 拖曳期間以 transform 位移的列表內容
+  let movingEls = [];
 
   window.addEventListener("scroll", () => {
-    if (scrubber.dragging) return;
-    if (!scrubber.enabled || document.querySelector("#list-view").hidden) return;
-    const geo = measureScrubberGeo();
+    if (state.dragging || !isShown()) return;
+    const geo = measureGeo();
     if (geo.end <= geo.start) return;
-    setScrubberThumb(scrubberRatio(window.scrollY, geo), geo);
-    showScrubberBriefly();
+    setThumb(ratioOf(window.scrollY, geo), geo);
+    showBriefly();
   }, { passive: true });
 
   // 手指在把手上移動時不可觸發頁面的原生捲動
@@ -488,48 +475,83 @@ function bindScrubberDrag() {
   thumb.addEventListener("pointerdown", (e) => {
     e.preventDefault();
     thumb.setPointerCapture(e.pointerId);
-    scrubber.dragging = true;
-    scrubber.geo = measureScrubberGeo();
+    state.dragging = true;
+    state.geo = measureGeo();
     startClientY = e.clientY;
     startThumbY = thumb.getBoundingClientRect().top - el.getBoundingClientRect().top;
     startScrollY = window.scrollY;
     targetScrollY = startScrollY;
-    movingEls = [...document.querySelectorAll("#list-view > :not(#scrubber)")];
+    // 先量完區段位置再取消固定標題，避免量到固定狀態下的位置
+    cacheSections();
+    movingEls = [...document.querySelectorAll(config.movingSelector)];
     movingEls.forEach(node => { node.style.willChange = "transform"; });
     document.documentElement.classList.add("scrubbing");
-    cacheScrubberSections();
-    renderScrubberYears(scrubber.geo);
-    updateScrubberBubble(startScrollY, scrubber.geo);
+    renderTrackLabels(state.geo);
+    updateBubble(startScrollY, state.geo);
     el.classList.add("dragging");
-    clearTimeout(scrubber.hideTimer);
+    clearTimeout(state.hideTimer);
   });
 
-  // 拖曳期間不捲動頁面，改以 transform 位移列表內容來預覽，放開時才真正捲動一次
   thumb.addEventListener("pointermove", (e) => {
-    if (!scrubber.dragging) return;
-    const geo = scrubber.geo;
+    if (!state.dragging) return;
+    const geo = state.geo;
     const ratio = geo.track > 0 ? Math.min(1, Math.max(0, (startThumbY + e.clientY - startClientY) / geo.track)) : 0;
     targetScrollY = geo.start + ratio * (geo.end - geo.start);
-    setScrubberThumb(ratio, geo);
-    updateScrubberBubble(targetScrollY, geo);
+    setThumb(ratio, geo);
+    updateBubble(targetScrollY, geo);
     const offset = startScrollY - targetScrollY;
     movingEls.forEach(node => { node.style.transform = `translateY(${offset}px)`; });
   });
 
   const endDrag = () => {
-    if (!scrubber.dragging) return;
-    scrubber.dragging = false;
-    scrubber.geo = null;
+    if (!state.dragging) return;
+    state.dragging = false;
+    state.geo = null;
     window.scrollTo(0, targetScrollY);
     movingEls.forEach(node => { node.style.transform = ""; node.style.willChange = ""; });
     movingEls = [];
     document.documentElement.classList.remove("scrubbing");
     el.classList.remove("dragging");
-    showScrubberBriefly();
+    showBriefly();
   };
   thumb.addEventListener("pointerup", endDrag);
   thumb.addEventListener("pointercancel", endDrag);
+
+  return {
+    /** 內容重新渲染後呼叫；enabled 為 false 時不顯示把手。 */
+    refresh(enabled) {
+      state.enabled = enabled;
+      el.hidden = !enabled;
+      el.classList.remove("visible", "dragging");
+    },
+  };
 }
+
+function topbarBottom() {
+  return document.querySelector(".topbar")?.getBoundingClientRect().bottom ?? 0;
+}
+
+const listScrubber = createScrubber({
+  el: document.querySelector("#scrubber"),
+  sectionSelector: "#episode-groups > section",
+  bubbleLabel: section => section.dataset.group === "unknown"
+    ? "日期不明"
+    : YEAR_MONTH_LABEL(...section.dataset.group.split("-").map(Number)),
+  trackLabel: section => section.dataset.group === "unknown" ? null : `${section.dataset.group.slice(0, 4)}年`,
+  stickyOffset: topbarBottom,
+  movingSelector: "#list-view > :not(.scrubber)",
+});
+
+const chapterScrubber = createScrubber({
+  el: document.querySelector("#chapter-scrubber"),
+  sectionSelector: "#transcript .chapter[id]",
+  bubbleLabel: section => section.querySelector(".chapter-title > span:last-child")?.textContent ?? "",
+  // Podcast 顯示章節開始時間；文章沒有時間，顯示章節序號
+  trackLabel: section => section.querySelector(".chapter-time")?.textContent
+    ?? `第 ${Number(section.id.replace("chapter-", "")) + 1} 章`,
+  stickyOffset: () => topbarBottom() + (document.querySelector("#detail-view .subtabbar")?.offsetHeight ?? 0),
+  movingSelector: "#detail-view > .detail-hero, #detail-view > .subtabbar, #sub-transcript > .block",
+});
 
 function renderGroups(groups) {
   const container = document.querySelector("#episode-groups");
@@ -599,8 +621,7 @@ let listRequestId = 0;
 function renderFilteredList(episodes) {
   const groups = groupByYearMonth(episodes, getSort());
   renderGroups(groups);
-  renderScrubber([...groups.keys()]);
-  bindScrubberDrag();
+  listScrubber.refresh(groups.size > 1);
   document.querySelector("#list-empty").hidden = episodes.length > 0;
 }
 
@@ -1132,6 +1153,7 @@ function renderTranscript(ep, query = "", options = {}) {
   });
   if (chapters.length) html.push("</section>");
   container.innerHTML = article ? `<div class="article-text">${html.join("")}</div>` : html.join("");
+  chapterScrubber.refresh(container.querySelectorAll(".chapter[id]").length >= 2);
 }
 
 /**

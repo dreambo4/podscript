@@ -516,6 +516,8 @@ body {
 }
 .scrubber.visible,
 .scrubber.dragging { opacity: 1; }
+/* 單集頁的軌道從分頁列下方開始 */
+.scrubber-below-tabs { top: calc(var(--topbar-h) + var(--subtabbar-h) + env(safe-area-inset-top) + 8px); }
 
 .scrubber-thumb {
   position: absolute;
@@ -553,6 +555,10 @@ body {
   font-size: 15px;
   font-weight: 700;
   white-space: nowrap;
+  /* 章節標題可能很長，超出時截斷 */
+  max-width: calc(100vw - 96px);
+  overflow: hidden;
+  text-overflow: ellipsis;
   border: 1px solid var(--line);
   box-shadow: 0 2px 10px rgba(0, 0, 0, .18);
   opacity: 0;
@@ -560,7 +566,7 @@ body {
 }
 .scrubber.dragging .scrubber-bubble { opacity: 1; }
 
-/* 軌道上的年份標籤，位置對應該年第一個分組在列表中的比例 */
+/* 軌道刻度（列表為年份、逐字稿為章節），位置對應該區段在內容中的比例 */
 .scrubber-years {
   position: absolute;
   inset: 0 54px 0 auto;
@@ -588,10 +594,12 @@ body {
   .scrubber, .scrubber-bubble, .scrubber-years { transition: none; }
 }
 
-/* 拖曳把手期間擋掉頁面的回彈。列表內容以 transform 位移預覽，
-   分組標題暫時取消固定，顯示在列表中的原位，與實際捲動到該處時一致 */
+/* 拖曳把手期間擋掉頁面的回彈。內容以 transform 位移預覽，
+   固定標題暫時取消固定，顯示在內容中的原位，與實際捲動到該處時一致 */
 html.scrubbing { overscroll-behavior: none; }
-html.scrubbing #list-view .group-heading { position: static; }
+html.scrubbing #list-view .group-heading,
+html.scrubbing #detail-view .subtabbar,
+html.scrubbing #detail-view .chapter-title { position: static; }
 
 /* ── 篩選 Bottom Sheet ───────────────────────────── */
 .sheet-wrap {
