@@ -11,7 +11,7 @@
   --warn: #b5762c;
   --heart: #c05c8a;
   --topbar-h: 56px;
-  --subtabbar-h: 45px; /* .subtabbar 的實際高度，章節標題疊在它下方 */
+  --subtabbar-h: 45px; /* .subtabbar 的高度，章節標題疊在它下方 */
   --topbar-bg: linear-gradient(135deg, #fdf3f6, #f2e9fb);
   --shadow-soft: 0 8px 20px -16px rgba(192, 92, 138, .5);
 
@@ -757,6 +757,9 @@ body {
   position: sticky;
   top: var(--topbar-h);
   z-index: 5;
+  /* 高度固定，章節標題（.chapter-title）依此疊在下方；不固定時實機字型會讓高度差零點幾 px 而露縫 */
+  box-sizing: border-box;
+  height: var(--subtabbar-h);
   display: flex;
   background: var(--bg);
   border-bottom: 1px solid var(--line);
@@ -929,6 +932,8 @@ a.seg-time { color: var(--accent); text-decoration: underline; text-underline-of
   padding: 10px 0 8px;
   border-bottom: 1px solid var(--line);
   background: var(--bg);
+  /* 往上多鋪一段同色背景，壓在分頁列底下，遮住小數點像素造成的縫 */
+  box-shadow: 0 -8px 0 var(--bg);
   font-size: 15px;
   line-height: 1.4;
 }
