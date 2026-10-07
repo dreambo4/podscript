@@ -17,7 +17,7 @@ create table if not exists episodes (
   duration_sec    int,
   summary         text,
   mindmap_mermaid text,                            -- Mermaid 原始碼
-  hashtags        text[] default '{}',             -- 5 個主題標籤，不含人名
+  hashtags        text[] default '{}',             -- 最多 5 個主題標籤，不含人名、語意不重疊
   transcript      jsonb not null,
   speakers        jsonb default '{}'::jsonb,       -- {"SPEAKER_00": "主持人"}
   provenance      jsonb default '{}'::jsonb,       -- 各階段的模型與版本

@@ -209,7 +209,7 @@ audio/<episode_guid>/
 ```bash
 claude -p "請讀取 transcript.txt，產生：(1) 100 字左右的繁體中文摘要
            (2) Mermaid mindmap 語法的架構心智圖
-           (3) 5 個主題標籤（不得為人名）。以 JSON 格式輸出。" \
+           (3) 最多 5 個主題標籤（不得為人名）。以 JSON 格式輸出。" \
        --model opus \
        --output-format json
 ```
@@ -433,7 +433,7 @@ create table episodes (
   duration_sec    int,
   summary         text,
   mindmap_mermaid text,                            -- Mermaid 原始碼
-  hashtags        text[] default '{}',             -- 5 個主題標籤，不含人名
+  hashtags        text[] default '{}',             -- 最多 5 個主題標籤，不含人名、語意不重疊
   transcript      jsonb not null,
   speakers        jsonb,                           -- {"SPEAKER_00": "主持人"}
   provenance      jsonb,                           -- 各階段的模型與版本，見下方
@@ -460,7 +460,7 @@ create index episodes_hashtags_idx on episodes using gin (hashtags);
 ```
 
 - 與摘要、心智圖同一次 `claude -p` 呼叫產生
-- 固定 5 個，每個 2-6 字，不含 `#` 符號
+- 最多 5 個，每個 2-6 字，不含 `#` 符號；標籤之間語意不可重疊，主題不夠多元時寧可少於 5 個，不用近義詞湊數（2026-10-07 改）
 - **不得為人名**（主持人、來賓、第三人皆不可）—— 以主題、領域、概念為準
 - 供手機端依標籤篩選；標籤缺漏不影響摘要與心智圖，不視為錯誤
 
@@ -674,7 +674,7 @@ claude -p "$(cat prompt.txt)" --model sonnet --output-format json > result_sonne
 - [ ] **選定模型產出的 Mermaid 語法可直接渲染**
 - [ ] **摘要涵蓋全集重點，非僅前段內容**
 - [ ] **摘要、心智圖、標籤可一併重新生成，且不重跑轉錄**（驗證：耗時 < 1 分鐘）
-- [ ] 標籤為 5 個主題詞，**不含人名**
+- [ ] 標籤為最多 5 個主題詞，**不含人名**，彼此語意不重疊
 - [ ] 下載鈕三項預設全勾，Markdown 與 PDF 皆可正常輸出
 - [ ] PDF 中心智圖未被截斷、中文未亂碼
 
