@@ -466,8 +466,10 @@ function bindScrubberDrag() {
   el.dataset.bound = "1";
 
   const thumb = el.querySelector(".scrubber-thumb");
-  let grabOffset = 0; // 手指按下處距把手頂端的距離，拖曳時維持不變，把手才不會跳
-  let trackTop = 0;   // 按下時軌道頂端的 clientY
+  // 拖曳位移以 screenY 計算：iOS Safari 在程式捲動頁面時回報的 clientY 會跟著捲動偏移，
+  // screenY 不受頁面捲動影響
+  let startScreenY = 0;
+  let startThumbY = 0; // 按下時把手在軌道內的位置
   let pendingScrollY = null;
 
   window.addEventListener("scroll", () => {
@@ -489,8 +491,8 @@ function bindScrubberDrag() {
     thumb.setPointerCapture(e.pointerId);
     scrubber.dragging = true;
     scrubber.geo = measureScrubberGeo();
-    grabOffset = e.clientY - thumb.getBoundingClientRect().top;
-    trackTop = el.getBoundingClientRect().top;
+    startScreenY = e.screenY;
+    startThumbY = thumb.getBoundingClientRect().top - el.getBoundingClientRect().top;
     cacheScrubberSections();
     renderScrubberYears(scrubber.geo);
     updateScrubberBubble(window.scrollY, scrubber.geo);
@@ -501,7 +503,7 @@ function bindScrubberDrag() {
   thumb.addEventListener("pointermove", (e) => {
     if (!scrubber.dragging) return;
     const geo = scrubber.geo;
-    const ratio = geo.track > 0 ? Math.min(1, Math.max(0, (e.clientY - grabOffset - trackTop) / geo.track)) : 0;
+    const ratio = geo.track > 0 ? Math.min(1, Math.max(0, (startThumbY + e.screenY - startScreenY) / geo.track)) : 0;
     const scrollY = geo.start + ratio * (geo.end - geo.start);
     setScrubberThumb(ratio, geo);
     updateScrubberBubble(scrollY, geo);
