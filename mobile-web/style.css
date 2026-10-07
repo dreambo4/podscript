@@ -585,7 +585,7 @@ body {
   color: var(--ink);
   font-size: 12px;
   white-space: nowrap;
-  /* 文章的刻度是章節標題，過長時截斷 */
+  /* 章節刻度是標題，過長時截斷 */
   max-width: 45vw;
   overflow: hidden;
   text-overflow: ellipsis;
