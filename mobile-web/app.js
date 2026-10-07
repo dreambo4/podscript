@@ -496,7 +496,7 @@ function bindScrubberDrag() {
     startScreenY = e.screenY;
     recentY = [e.screenY];
     appliedY = e.screenY;
-    // 拖曳期間擋掉頁面的原生手勢捲動（程式呼叫 scrollTo 不受影響）
+    // 拖曳期間擋掉頁面的回彈
     document.documentElement.classList.add("scrubbing");
     startThumbY = thumb.getBoundingClientRect().top - el.getBoundingClientRect().top;
     cacheScrubberSections();

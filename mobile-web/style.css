@@ -588,8 +588,8 @@ body {
   .scrubber, .scrubber-bubble, .scrubber-years { transition: none; }
 }
 
-/* 拖曳把手期間擋掉頁面的原生手勢捲動與回彈，捲動只由把手控制 */
-html.scrubbing { overflow: hidden; overscroll-behavior: none; }
+/* 拖曳把手期間擋掉頁面的回彈 */
+html.scrubbing { overscroll-behavior: none; }
 
 /* ── 篩選 Bottom Sheet ───────────────────────────── */
 .sheet-wrap {
