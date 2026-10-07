@@ -269,12 +269,14 @@ function renderEpisodeCard(ep) {
   div.className = "ep-card";
   // 從搜尋結果點進去時帶上關鍵字，詳細頁據此跳到逐字稿命中處
   const href = `#/ep/${encodeURIComponent(ep.episode_guid)}${ep.query ? `?${searchHashParams(ep.query, ep.searchOptions)}` : ""}`;
+  // 顯示目前排序依據的日期，與年月分組標題一致
+  const date = ep[getSort()];
   div.innerHTML = `
     <a href="${href}" class="ep-link">
       ${renderCoverHtml(ep.podcast_name)}
       <div class="ep-body">
         <span class="ep-title">${escapeHtml(ep.title)}</span>
-        <span class="ep-meta">${isArticle(ep) ? `<svg class="icon icon-xs ep-kind-icon" aria-label="文章"><use href="#ic-article"/></svg>` : ""}${escapeHtml(ep.podcast_name)}${ep.published_at ? " · " + ep.published_at.slice(0, 10) : ""}${ep.duration_sec ? " · " + formatDuration(ep.duration_sec) : ""}</span>
+        <span class="ep-meta">${isArticle(ep) ? `<svg class="icon icon-xs ep-kind-icon" aria-label="文章"><use href="#ic-article"/></svg>` : ""}${escapeHtml(ep.podcast_name)}${date ? " · " + date.slice(0, 10) : ""}${ep.duration_sec ? " · " + formatDuration(ep.duration_sec) : ""}</span>
         ${snippetHtml(ep)}
         <span class="tags">${cardTagsHtml(ep.hashtags)}</span>
       </div>
@@ -323,45 +325,191 @@ function groupByYearMonth(episodes, sortField) {
   return groups;
 }
 
-function renderScrubber(groupKeys) {
-  const scrubber = document.querySelector("#scrubber");
-  document.querySelector("#list-scroll").classList.toggle("has-scrubber", groupKeys.length > 1);
-  if (groupKeys.length <= 1) {
-    scrubber.hidden = true;
-    scrubber.innerHTML = "";
-    return;
-  }
+// ── 日期快速捲動（仿 Google 相簿）────────────────────
+// 把手位置 = 目前捲動量在「第一個分組 ~ 頁尾」之間的比例；拖曳把手時反向換算成捲動量。
+// 目前年月以一條「判斷線」決定：平常貼齊畫面頂端，進入最後一個畫面高度的捲動量後
+// 逐漸移到畫面底部，因此捲不到頂端的末段分組在拖到底時仍會被選到。年份刻度用同一套換算。
+// 多於一個年月分組才啟用。
+const SCRUBBER_HIDE_DELAY = 1500;
+const SCRUBBER_YEAR_MIN_GAP = 26; // 年份標籤間距小於此值（px）時略過，避免互相重疊
+const SCRUBBER_HEADING_ROOM = 48; // 判斷線在畫面底部時保留的高度，讓該組標題仍在畫面內
 
-  scrubber.hidden = false;
-  scrubber.innerHTML = groupKeys
-    .map(key => {
-      if (key === "unknown") return `<span class="scrubber-tick" data-key="unknown">−</span>`;
-      const [y, m] = key.split("-");
-      return `<span class="scrubber-tick" data-key="${key}">${m}</span>`;
-    })
-    .join("");
+const scrubber = {
+  enabled: false,
+  dragging: false,
+  hideTimer: null,
+  sections: [], // 拖曳開始時快取 [{ key, top }]，top 為該分組捲到頂端時的 scrollY
+};
+
+function scrubberEl() { return document.querySelector("#scrubber"); }
+
+function scrubberStickyOffset() {
+  return document.querySelector(".topbar")?.getBoundingClientRect().bottom ?? 0;
+}
+
+// 可捲動區間：第一個分組捲到頂端 ~ 頁尾
+function scrubberRange() {
+  const first = document.querySelector("#episode-groups > section");
+  const start = first ? first.getBoundingClientRect().top + window.scrollY - scrubberStickyOffset() : 0;
+  const end = document.documentElement.scrollHeight - window.innerHeight;
+  return { start, end };
+}
+
+function scrubberRatio(scrollY, { start, end }) {
+  return end > start ? Math.min(1, Math.max(0, (scrollY - start) / (end - start))) : 0;
+}
+
+// 判斷線從畫面頂端移到底部的最大位移
+function scrubberLineTravel() {
+  return Math.max(0, window.innerHeight - scrubberStickyOffset() - SCRUBBER_HEADING_ROOM);
+}
+
+// 判斷線開始往下移的捲動量
+function scrubberTailStart({ start, end }) {
+  return Math.max(start, end - scrubberLineTravel());
+}
+
+// 捲動量 scrollY 對應的判斷線位置（與 section.top 同一座標）
+function scrubberLineAt(scrollY, range) {
+  const tail = scrubberTailStart(range);
+  if (scrollY <= tail || range.end <= tail) return scrollY;
+  return scrollY + scrubberLineTravel() * Math.min(1, (scrollY - tail) / (range.end - tail));
+}
+
+// scrubberLineAt 的反函數：判斷線剛好碰到 top 時的捲動量
+function scrubberScrollForLine(top, range) {
+  const tail = scrubberTailStart(range);
+  if (top <= tail || range.end <= tail) return top;
+  const tailLen = range.end - tail;
+  return Math.min(range.end, (top * tailLen + scrubberLineTravel() * tail) / (tailLen + scrubberLineTravel()));
+}
+
+function scrubberTrackHeight() {
+  const el = scrubberEl();
+  return el.clientHeight - el.querySelector(".scrubber-thumb").offsetHeight;
+}
+
+function renderScrubber(groupKeys) {
+  const el = scrubberEl();
+  scrubber.enabled = groupKeys.length > 1;
+  el.hidden = !scrubber.enabled;
+  el.classList.remove("visible", "dragging");
+}
+
+function updateScrubberThumb() {
+  const ratio = scrubberRatio(window.scrollY, scrubberRange());
+  scrubberEl().querySelector(".scrubber-thumb").style.transform = `translateY(${ratio * scrubberTrackHeight()}px)`;
+}
+
+function cacheScrubberSections() {
+  const offset = scrubberStickyOffset();
+  scrubber.sections = [...document.querySelectorAll("#episode-groups > section")].map(section => ({
+    key: section.dataset.group,
+    top: section.getBoundingClientRect().top + window.scrollY - offset,
+  }));
+}
+
+function scrubberLabelFor(key) {
+  return key === "unknown" ? "日期不明" : YEAR_MONTH_LABEL(...key.split("-").map(Number));
+}
+
+function renderScrubberYears() {
+  const range = scrubberRange();
+  const track = scrubberTrackHeight();
+  const thumbHalf = scrubberEl().querySelector(".scrubber-thumb").offsetHeight / 2;
+  const seen = new Set();
+  let lastY = -Infinity;
+  const html = [];
+
+  scrubber.sections.forEach(({ key, top }) => {
+    if (key === "unknown") return;
+    const year = key.slice(0, 4);
+    if (seen.has(year)) return;
+    seen.add(year);
+
+    const ratio = scrubberRatio(scrubberScrollForLine(top, range), range);
+    const y = ratio * track + thumbHalf;
+    if (y - lastY < SCRUBBER_YEAR_MIN_GAP) return;
+    lastY = y;
+    html.push(`<span class="scrubber-year" style="top:${y}px">${year}年</span>`);
+  });
+
+  scrubberEl().querySelector(".scrubber-years").innerHTML = html.join("");
+}
+
+function updateScrubberBubble() {
+  const line = scrubberLineAt(window.scrollY, scrubberRange());
+  let current = scrubber.sections[0];
+  for (const section of scrubber.sections) {
+    if (section.top <= line + 1) current = section;
+    else break;
+  }
+  const el = scrubberEl();
+  const bubble = el.querySelector(".scrubber-bubble");
+  bubble.textContent = current ? scrubberLabelFor(current.key) : "";
+
+  // 與目前年月泡泡垂直重疊的年份標籤先隱藏，避免文字疊在一起
+  const bubbleRect = bubble.getBoundingClientRect();
+  el.querySelectorAll(".scrubber-year").forEach(year => {
+    const rect = year.getBoundingClientRect();
+    year.classList.toggle("covered", rect.bottom > bubbleRect.top - 4 && rect.top < bubbleRect.bottom + 4);
+  });
+}
+
+function showScrubberBriefly() {
+  const el = scrubberEl();
+  el.classList.add("visible");
+  clearTimeout(scrubber.hideTimer);
+  scrubber.hideTimer = setTimeout(() => {
+    if (!scrubber.dragging) el.classList.remove("visible");
+  }, SCRUBBER_HIDE_DELAY);
 }
 
 function bindScrubberDrag() {
-  const scrubber = document.querySelector("#scrubber");
-  if (scrubber.dataset.bound) return;
-  scrubber.dataset.bound = "1";
+  const el = scrubberEl();
+  if (el.dataset.bound) return;
+  el.dataset.bound = "1";
 
-  function jumpToKey(key) {
-    const section = document.querySelector(`[data-group="${key}"]`);
-    if (section) section.scrollIntoView({ block: "start" });
-  }
+  const thumb = el.querySelector(".scrubber-thumb");
+  let grabOffset = 0; // 手指按下處距把手頂端的距離，拖曳時維持不變，把手才不會跳
 
-  function handlePoint(clientY) {
-    const el = document.elementFromPoint(scrubber.getBoundingClientRect().left + 10, clientY);
-    const tick = el && el.closest(".scrubber-tick");
-    if (tick) jumpToKey(tick.dataset.key);
-  }
+  window.addEventListener("scroll", () => {
+    if (!scrubber.enabled || document.querySelector("#list-view").hidden) return;
+    const { start, end } = scrubberRange();
+    if (end <= start) return;
+    updateScrubberThumb();
+    if (scrubber.dragging) updateScrubberBubble();
+    else showScrubberBriefly();
+  }, { passive: true });
 
-  let dragging = false;
-  scrubber.addEventListener("pointerdown", e => { dragging = true; handlePoint(e.clientY); });
-  window.addEventListener("pointermove", e => { if (dragging) handlePoint(e.clientY); });
-  window.addEventListener("pointerup", () => { dragging = false; });
+  thumb.addEventListener("pointerdown", (e) => {
+    e.preventDefault();
+    thumb.setPointerCapture(e.pointerId);
+    scrubber.dragging = true;
+    grabOffset = e.clientY - thumb.getBoundingClientRect().top;
+    cacheScrubberSections();
+    renderScrubberYears();
+    updateScrubberBubble();
+    el.classList.add("dragging");
+    clearTimeout(scrubber.hideTimer);
+  });
+
+  thumb.addEventListener("pointermove", (e) => {
+    if (!scrubber.dragging) return;
+    const y = e.clientY - grabOffset - el.getBoundingClientRect().top;
+    const ratio = Math.min(1, Math.max(0, y / scrubberTrackHeight()));
+    const { start, end } = scrubberRange();
+    window.scrollTo(0, start + ratio * (end - start));
+  });
+
+  const endDrag = () => {
+    if (!scrubber.dragging) return;
+    scrubber.dragging = false;
+    el.classList.remove("dragging");
+    showScrubberBriefly();
+  };
+  thumb.addEventListener("pointerup", endDrag);
+  thumb.addEventListener("pointercancel", endDrag);
 }
 
 function renderGroups(groups) {
@@ -1268,7 +1416,9 @@ function ptrCanStart() {
 }
 
 document.addEventListener("touchstart", (e) => {
-  ptrStartY = ptrCanStart() && e.touches.length === 1 ? e.touches[0].clientY : null;
+  // 拖曳日期把手是捲動手勢，不可被當成下拉刷新
+  const isOnScrubber = e.target instanceof Element && e.target.closest(".scrubber-thumb");
+  ptrStartY = ptrCanStart() && e.touches.length === 1 && !isOnScrubber ? e.touches[0].clientY : null;
   ptrDistance = 0;
 }, { passive: true });
 

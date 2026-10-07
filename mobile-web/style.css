@@ -421,9 +421,6 @@ body {
 /* ── 卡片式列表 ───────────────────────────────── */
 .cards { display: flex; flex-direction: column; gap: 12px; }
 
-/* scrubber 顯示時（多於一個年月分組）才留白避免被蓋住；只有一組時不出現，卡片維持滿寬 */
-#list-scroll.has-scrubber .cards { padding-right: 28px; }
-
 .ep-card {
   position: relative;
   display: flex;
@@ -503,29 +500,92 @@ body {
 .empty-state .icon-lg { color: var(--line); margin-bottom: 12px; }
 .empty-state p { margin: 4px 0; }
 
-/* 右側 scrubber：仿 iOS 相簿的縱向年月快速跳轉軸 */
+/* 右側 scrubber：仿 Google 相簿的拖曳式日期快速捲動。
+   捲動時浮出把手，閒置後淡出；拖曳時沿軌道顯示年份、把手旁顯示目前年月。
+   軌道本身不接收觸控，只有把手可拖，避免擋住卡片右側的點擊 */
 .scrubber {
   position: fixed;
-  right: calc(4px + env(safe-area-inset-right));
-  top: calc(var(--topbar-h) + env(safe-area-inset-top) + 100px);
+  right: env(safe-area-inset-right);
+  top: calc(var(--topbar-h) + env(safe-area-inset-top) + 8px);
   bottom: calc(16px + env(safe-area-inset-bottom));
-  width: 24px;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  gap: 2px;
-  touch-action: none;
-  z-index: 6;
+  width: 0;
+  z-index: 7;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity .25s;
 }
+.scrubber.visible,
+.scrubber.dragging { opacity: 1; }
 
-.scrubber-tick {
-  flex: 1;
+.scrubber-thumb {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 44px;
+  height: 52px;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 10px;
+  padding-right: 4px;
+  border-radius: 26px 0 0 26px;
+  background: var(--card);
   color: var(--muted);
-  max-height: 22px;
+  border: 1px solid var(--line);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, .18);
+  touch-action: none;
+  cursor: grab;
+  will-change: transform;
+}
+.scrubber.visible .scrubber-thumb,
+.scrubber.dragging .scrubber-thumb { pointer-events: auto; }
+.scrubber.dragging .scrubber-thumb { color: var(--accent); cursor: grabbing; }
+
+/* 把手旁的目前年月，只在拖曳時出現 */
+.scrubber-bubble {
+  position: absolute;
+  right: calc(100% + 10px);
+  top: 50%;
+  transform: translateY(-50%);
+  padding: 8px 16px;
+  border-radius: 999px;
+  background: var(--card);
+  color: var(--ink);
+  font-size: 15px;
+  font-weight: 700;
+  white-space: nowrap;
+  border: 1px solid var(--line);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, .18);
+  opacity: 0;
+  transition: opacity .15s;
+}
+.scrubber.dragging .scrubber-bubble { opacity: 1; }
+
+/* 軌道上的年份標籤，位置對應該年第一個分組在列表中的比例 */
+.scrubber-years {
+  position: absolute;
+  inset: 0 54px 0 auto;
+  opacity: 0;
+  transition: opacity .15s;
+}
+.scrubber.dragging .scrubber-years { opacity: 1; }
+
+.scrubber-year {
+  position: absolute;
+  right: 0;
+  transform: translateY(-50%);
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: var(--card);
+  color: var(--ink);
+  font-size: 12px;
+  white-space: nowrap;
+  border: 1px solid var(--line);
+  box-shadow: 0 1px 6px rgba(0, 0, 0, .12);
+}
+.scrubber-year.covered { visibility: hidden; }
+
+@media (prefers-reduced-motion: reduce) {
+  .scrubber, .scrubber-bubble, .scrubber-years { transition: none; }
 }
 
 /* ── 篩選 Bottom Sheet ───────────────────────────── */
