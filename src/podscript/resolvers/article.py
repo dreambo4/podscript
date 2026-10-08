@@ -53,12 +53,21 @@ def resolve_url(url: str) -> Article:
     if not html:
         raise ResolveError("抓不到這個網頁，可改用「貼上全文」")
 
-    document = trafilatura.bare_extraction(
-        html, url=url, with_metadata=True, include_comments=False
-    )
-    text = (document.text if document else "") or ""
-    paragraphs = _split_paragraphs(text)
-    if sum(len(p) for p in paragraphs) < MIN_CHARS:
+    # 精準模式會濾掉「加入Google首選」這類按鈕文字與站方的 AI 摘要；
+    # 正文因此不足時改用預設模式。
+    for favor_precision in (True, False):
+        document = trafilatura.bare_extraction(
+            html,
+            url=url,
+            with_metadata=True,
+            include_comments=False,
+            favor_precision=favor_precision,
+        )
+        text = (document.text if document else "") or ""
+        paragraphs = _split_paragraphs(text)
+        if sum(len(p) for p in paragraphs) >= MIN_CHARS:
+            break
+    else:
         raise ResolveError(
             "擷取到的正文太短，可能是付費文章或需要登入，可改用「貼上全文」"
         )
