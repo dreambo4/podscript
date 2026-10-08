@@ -41,7 +41,8 @@ venv 建在專案根目錄的 `venv/`：
 ```bash
 python3.12 -m venv venv
 ./venv/bin/pip install pyannote.audio fastapi uvicorn python-dotenv requests \
-  opencc-python-reimplemented "psycopg[binary]" "yt-dlp[default]" trafilatura
+  opencc-python-reimplemented "psycopg[binary]" "yt-dlp[default]" trafilatura \
+  httpx pypdfium2==5.9.0
 ```
 
 YouTube 下載另需 JavaScript 執行環境（node 或 deno 擇一，本機有就好）。
