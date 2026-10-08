@@ -1,7 +1,9 @@
-"""論文 PDF 原檔的存放：Supabase Storage 的 papers bucket。
+"""存放在 Supabase Storage 的檔案：論文 PDF 原檔（papers）與思辨練習紀錄（notes）。
 
-資料庫只存抽出的文字，PDF 原檔放 Storage，兩台電腦與手機都從這裡取得。
-物件名稱為 `<guid>.pdf`，guid 由檔案內容雜湊產生，同一份 PDF 重複上傳只會覆蓋同一個物件。
+兩個 bucket 都不公開，兩台電腦都從這裡取得。
+- papers：資料庫只存抽出的文字，PDF 原檔放這裡。物件名稱為 `<guid>.pdf`，
+  guid 由檔案內容雜湊產生，同一份 PDF 重複上傳只會覆蓋同一個物件
+- notes：`notes/<guid>.md` 的同步目的地，物件名稱與本機檔名相同。repo 是公開的，紀錄不能進 git
 
 Storage 不能用 DATABASE_URL 直連存取，改走 Storage API，
 需要 `.env` 的 SUPABASE_URL 與 SUPABASE_SECRET_KEY（secret key 不受 RLS 限制，只放本機）。
@@ -13,11 +15,14 @@ import hashlib
 import json
 import os
 from dataclasses import dataclass
+from datetime import datetime
 from pathlib import Path
+from urllib.parse import quote
 
 import httpx
 
-BUCKET = "papers"
+PAPERS_BUCKET = "papers"
+NOTES_BUCKET = "notes"
 TIMEOUT = 60
 
 
@@ -38,6 +43,21 @@ class StoredPaper:
     guid: str
     size: int
     metadata: dict
+
+
+@dataclass
+class StoredNote:
+    """Storage 中的一份思辨練習紀錄。
+
+    Attributes:
+        name: 物件名稱，即本機 `notes/` 下的檔名。
+        updated_at: 最後上傳時間，內容不同時與本機修改時間比較，決定同步方向。
+        md5: 內容的 MD5（Storage 的 eTag），與本機相同即不需同步。
+    """
+
+    name: str
+    updated_at: datetime
+    md5: str
 
 
 def paper_guid(pdf: bytes) -> str:
@@ -63,19 +83,7 @@ def upload_paper(path: Path, *, source_url: str | None = None) -> str:
     if source_url:
         metadata["source_url"] = source_url
 
-    response = _request(
-        "POST",
-        f"object/{BUCKET}/{guid}.pdf",
-        content=data,
-        headers={
-            "Content-Type": "application/pdf",
-            "x-upsert": "true",
-            "x-metadata": base64.b64encode(
-                json.dumps(metadata, ensure_ascii=False).encode()
-            ).decode(),
-        },
-    )
-    _raise_for_status(response, "上傳")
+    _upload(PAPERS_BUCKET, f"{guid}.pdf", data, "application/pdf", metadata=metadata)
     return guid
 
 
@@ -85,35 +93,21 @@ def download_paper(guid: str, dest: Path) -> Path:
     Raises:
         StorageError: 未設定金鑰、找不到檔案或下載失敗。
     """
-    response = _request("GET", f"object/authenticated/{BUCKET}/{guid}.pdf")
-    _raise_for_status(response, "下載")
-    dest.parent.mkdir(parents=True, exist_ok=True)
-    dest.write_bytes(response.content)
-    return dest
+    return _download(PAPERS_BUCKET, f"{guid}.pdf", dest)
 
 
 def list_papers() -> list[StoredPaper]:
-    """列出 bucket 中所有論文原檔，新上傳的在前。
+    """列出所有論文原檔，新上傳的在前。
 
     Raises:
         StorageError: 未設定金鑰或查詢失敗。
     """
-    response = _request(
-        "POST",
-        f"object/list/{BUCKET}",
-        json={
-            "prefix": "",
-            "limit": 1000,
-            "sortBy": {"column": "created_at", "order": "desc"},
-        },
-    )
-    _raise_for_status(response, "列出")
     # list 不回傳上傳時附帶的 metadata，逐筆以 info 取得；論文數量少，不影響速度。
     papers = []
-    for item in response.json():
+    for item in _list(PAPERS_BUCKET):
         if not item["name"].endswith(".pdf"):
             continue
-        info = _request("GET", f"object/info/{BUCKET}/{item['name']}")
+        info = _request("GET", f"object/info/{PAPERS_BUCKET}/{quote(item['name'])}")
         _raise_for_status(info, "查詢")
         detail = info.json()
         papers.append(
@@ -124,6 +118,83 @@ def list_papers() -> list[StoredPaper]:
             )
         )
     return papers
+
+
+def upload_note(path: Path) -> None:
+    """上傳一份思辨練習紀錄，物件名稱為檔名；已存在時覆蓋。
+
+    Raises:
+        StorageError: 未設定金鑰或上傳失敗。
+    """
+    _upload(NOTES_BUCKET, path.name, path.read_bytes(), "text/markdown")
+
+
+def download_note(name: str, dest: Path) -> Path:
+    """下載一份思辨練習紀錄到 dest，回傳寫入的路徑。
+
+    Raises:
+        StorageError: 未設定金鑰、找不到檔案或下載失敗。
+    """
+    return _download(NOTES_BUCKET, name, dest)
+
+
+def list_notes() -> list[StoredNote]:
+    """列出所有思辨練習紀錄。
+
+    Raises:
+        StorageError: 未設定金鑰或查詢失敗。
+    """
+    return [
+        StoredNote(
+            name=item["name"],
+            updated_at=datetime.fromisoformat(item["updated_at"].replace("Z", "+00:00")),
+            md5=item["metadata"]["eTag"].strip('"'),
+        )
+        for item in _list(NOTES_BUCKET)
+        if item["name"].endswith(".md")
+    ]
+
+
+def _upload(
+    bucket: str,
+    name: str,
+    data: bytes,
+    content_type: str,
+    *,
+    metadata: dict | None = None,
+) -> None:
+    headers = {"Content-Type": content_type, "x-upsert": "true"}
+    if metadata:
+        headers["x-metadata"] = base64.b64encode(
+            json.dumps(metadata, ensure_ascii=False).encode()
+        ).decode()
+    response = _request(
+        "POST", f"object/{bucket}/{quote(name)}", content=data, headers=headers
+    )
+    _raise_for_status(response, "上傳")
+
+
+def _download(bucket: str, name: str, dest: Path) -> Path:
+    response = _request("GET", f"object/authenticated/{bucket}/{quote(name)}")
+    _raise_for_status(response, "下載")
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    dest.write_bytes(response.content)
+    return dest
+
+
+def _list(bucket: str) -> list[dict]:
+    """列出 bucket 根目錄的物件，新上傳的在前。"""
+    response = _request(
+        "POST",
+        f"object/list/{bucket}",
+        json={
+            "prefix": "",
+            "limit": 1000,
+            "sortBy": {"column": "created_at", "order": "desc"},
+        },
+    )
+    _raise_for_status(response, "列出")
+    return response.json()
 
 
 def _request(method: str, path: str, **kwargs) -> httpx.Response:

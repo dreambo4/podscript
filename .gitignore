@@ -4,7 +4,7 @@ models/
 audio/
 # 從 Storage 下載的論文 PDF
 papers/
-# 思辨練習紀錄，只留本機
+# 思辨練習紀錄：repo 公開不可進 git，以 scripts/notes.py 同步到 Supabase Storage
 notes/
 *.db
 __pycache__/

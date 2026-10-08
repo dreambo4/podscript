@@ -29,7 +29,8 @@ Podcast 逐字稿工具：貼 Apple Podcast 網址 → 分人逐字稿 + 摘要 
 
 ## 思辨練習
 **每轉完一集，都要帶使用者做批判性思考練習。** 流程、六個問題與紀錄格式見
-`.claude/思辨練習.md`。Claude 負責提問，不給結論；紀錄存 `notes/<guid>.md`，只留本機
+`.claude/思辨練習.md`。Claude 負責提問，不給結論；紀錄存 `notes/<guid>.md`，不進 git（repo 公開），
+以 `scripts/notes.py sync` 同步到 Supabase Storage 的 `notes` bucket 跨電腦共用
 
 ## 禁止使用 emoji
 介面文字、程式碼、註解、文件、commit 訊息一律不用 emoji。
