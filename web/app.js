@@ -64,6 +64,38 @@ $("paste-form").addEventListener("submit", async (e) => {
   }
 });
 
+// 論文：選 PDF 檔後直接上傳，全文擷取與摘要在本機進行。
+$("btn-pdf").addEventListener("click", () => $("pdf-file").click());
+
+$("pdf-file").addEventListener("change", async (e) => {
+  const file = e.target.files[0];
+  e.target.value = ""; // 同一個檔案再選一次也要觸發
+  if (!file) return;
+
+  const btn = $("btn-pdf");
+  btn.disabled = true;
+  btn.textContent = "上傳中…";
+  try {
+    const res = await fetch(`/api/papers?filename=${encodeURIComponent(file.name)}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/pdf" },
+      body: file,
+    });
+    if (!res.ok) {
+      const detail = await res.json().catch(() => ({}));
+      throw new Error(detail.detail || `上傳失敗（${res.status}）`);
+    }
+    const job = await res.json();
+    location.hash = job.guid;
+    await loadLibrary();
+  } catch (err) {
+    alert(err.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "上傳論文";
+  }
+});
+
 function showProgress(job) {
   $("empty").hidden = true;
   $("progress").hidden = false;
@@ -84,7 +116,7 @@ function showProgress(job) {
 
   // 中斷或失敗時可直接接續，已下載與已轉錄的階段會自動跳過。
   const resume = $("btn-resume");
-  resume.hidden = !failed || !job.url;
+  resume.hidden = !failed || !canResume(job);
   resume.dataset.guid = job.guid;
 
   const index = job.stages.indexOf(job.stage);
@@ -123,6 +155,11 @@ $("btn-resume").addEventListener("click", async (e) => {
     btn.disabled = false;
   }
 });
+
+/** 論文沒有網址，由本機的 PDF 接續；其他內容要有原始網址才能接續。 */
+function canResume(job) {
+  return Boolean(job.url) || job.kind === "paper";
+}
 
 /** 已經跑了多久，讓使用者判斷是否卡住。 */
 function elapsed(startedAt) {
@@ -166,7 +203,7 @@ async function poll(guid) {
 
   // 中斷的任務（多半是服務重啟）直接接續，不必使用者介入；
   // 已完成的階段會因檔案存在而跳過，不會重跑。
-  if (job.error && job.url && !resumed.has(guid)) {
+  if (job.error && canResume(job) && !resumed.has(guid)) {
     resumed.add(guid);
     try {
       await api(`/api/jobs/${guid}/resume`, { method: "POST" });
@@ -207,12 +244,13 @@ async function showEpisode(guid) {
   $("ep-title").textContent = data.episode.title;
   renderUploadState();
 
-  const article = isArticle(data.episode);
-  $("transcript-heading").textContent = article ? "原文" : "逐字稿";
-  $("download-transcript-label").textContent = article ? "原文" : "逐字稿";
+  const text = isText(data.episode);
+  $("transcript-heading").textContent = text ? "原文" : "逐字稿";
+  $("download-transcript-label").textContent = text ? "原文" : "逐字稿";
 
   renderSummary(data.summary);
-  if (article) $("speaker-controls").innerHTML = "";
+  renderEpisodeProjects();
+  if (text) $("speaker-controls").innerHTML = "";
   else renderSpeakers(data);
   renderTranscript(data);
   window.scrollTo({ top: 0, behavior: "smooth" });
@@ -412,7 +450,8 @@ function renderKnownSpeakers(names) {
 
 function renderTranscript(data) {
   renderChapters(data);
-  const article = isArticle(data.episode);
+  const article = isText(data.episode);
+  const paper = isPaper(data.episode);
   const chapters = data.summary?.chapters || [];
   const startsAt = chapterStarts(data.segments, chapters, article);
   // 每章包成一個 section：標題 sticky 只在所屬 section 內固定，捲到下一章時被推走。
@@ -430,7 +469,9 @@ function renderTranscript(data) {
     } else if (i === 0 && chapters.length) {
       html.push(`<section class="chapter">`);
     }
-    html.push(article ? `<p>${escapeHtml(s.text)}</p>` : segmentHtml(data, s));
+    // 論文的章標題就是章節標題，上面已顯示，不重複
+    if (paper && index !== undefined && s.kind === "h1") return;
+    html.push(paper ? paperSegmentHtml(s) : article ? `<p>${escapeHtml(s.text)}</p>` : segmentHtml(data, s));
   });
   if (chapters.length) html.push("</section>");
   $("transcript").innerHTML = article
@@ -440,6 +481,23 @@ function renderTranscript(data) {
   $("transcript").querySelectorAll("span.seg-time").forEach((el) => {
     el.addEventListener("click", () => playAt(Number(el.dataset.at)));
   });
+}
+
+/** 表格：第一行是表格標題時獨立成段落正常換行，表格列才用等寬字逐列顯示。rows 已跳脫。 */
+function paperTableHtml(rows) {
+  const caption = /^(table|tab\.|表)\s*\S/i.test(rows[0]) ? rows.shift() : "";
+  return `${caption ? `<p class="paper-table-caption">${caption}</p>` : ""}${
+    rows.length ? `<pre class="paper-table">${rows.join("\n")}</pre>` : ""
+  }`;
+}
+
+/** 論文段落依類型顯示：章節標題、表格（每列一行）、參考文獻。 */
+function paperSegmentHtml(s) {
+  if (s.kind === "h1") return `<h4 class="paper-heading">${escapeHtml(s.text)}</h4>`;
+  if (s.kind === "h2") return `<h5 class="paper-subheading">${escapeHtml(s.text)}</h5>`;
+  if (s.kind === "table") return paperTableHtml(s.text.split("\n").map(escapeHtml));
+  if (s.kind === "ref") return `<p class="paper-ref">${escapeHtml(s.text)}</p>`;
+  return `<p>${escapeHtml(s.text)}</p>`;
 }
 
 /**
@@ -489,8 +547,8 @@ function renderChapters(data) {
         const play = youtube
           ? `<a class="chapter-play" href="${escapeHtml(youtube)}" target="_blank" rel="noopener noreferrer">YouTube ↗</a>`
           : "";
-        // 文章章節以段落定位，沒有時間
-        const time = isArticle(data.episode) ? "" : `<span class="chapter-time">${formatTime(c.start)}</span>`;
+        // 文章與論文的章節以段落定位，沒有時間
+        const time = isText(data.episode) ? "" : `<span class="chapter-time">${formatTime(c.start)}</span>`;
         return `<li>
           ${time}
           <a href="#" data-chapter="${i}">${escapeHtml(c.title)}</a>
@@ -514,6 +572,15 @@ function isArticle(episode) {
   return episode?.platform === "article";
 }
 
+function isPaper(episode) {
+  return episode?.platform === "paper";
+}
+
+/** 文章與論文：沒有音檔與說話者，以段落定位。 */
+function isText(episode) {
+  return isArticle(episode) || isPaper(episode);
+}
+
 /**
  * 只接受 https 網址。source_url 會放進 href，
  * 擋掉 javascript: 等 scheme（Apple 的網址判斷只看是否含網域字串）。
@@ -534,6 +601,12 @@ function youtubeTimeUrl(episode, seconds) {
 
 function renderSourceLink(episode) {
   const link = $("ep-source");
+  if (isPaper(episode)) {
+    link.hidden = false;
+    link.href = `/api/episodes/${encodeURIComponent(episode.episode_guid)}/pdf`;
+    link.textContent = "開啟 PDF 原檔 ↗";
+    return;
+  }
   const url = safeSourceUrl(episode.source_url);
   link.hidden = !url;
   if (!url) return;
@@ -678,7 +751,9 @@ $("btn-delete").addEventListener("click", async (e) => {
   const uploaded = Boolean(current.uploaded_at);
   const warning = uploaded
     ? "資料庫與本機檔案都會刪除，手機端也會看不到，所有人的收藏一併移除。"
-    : isArticle(current.episode)
+    : isPaper(current.episode)
+      ? "本機檔案（PDF、原文與摘要）都會刪除。"
+      : isArticle(current.episode)
       ? "本機檔案（原文與摘要）都會刪除。"
       : "本機檔案（含音檔與轉錄結果）都會刪除。";
   if (!confirm(`確定要刪除「${current.episode.title}」？\n${warning}\n此動作無法復原。`)) return;
@@ -709,7 +784,7 @@ function renderUploadState() {
     current.provenance?.transcribe_model,
     uploaded ? `已上傳 ${current.uploaded_at.slice(0, 10)}` : "尚未上傳",
     current.needs_reupload ? "重新生成的內容尚未上傳" : "",
-    current.has_audio === false && !isArticle(current.episode) ? "音檔已刪除" : "",
+    current.has_audio === false && !isText(current.episode) ? "音檔已刪除" : "",
   ].filter(Boolean);
   $("ep-meta").textContent = meta.join(" · ");
   renderSourceLink(current.episode);
@@ -757,9 +832,18 @@ function downloadMarkdown(parts) {
     lines.push("## 心智圖", "", "```mermaid", d.summary.mindmap, "```", "");
   }
   const chapters = d.summary?.chapters || [];
-  const startsAt = chapterStarts(d.segments, chapters, isArticle(d.episode));
+  const startsAt = chapterStarts(d.segments, chapters, isText(d.episode));
   const heading = (i) => (startsAt.has(i) ? [`### ${chapters[startsAt.get(i)].title}`, ""] : []);
-  if (parts.includes("transcript") && isArticle(d.episode)) {
+  if (parts.includes("transcript") && isPaper(d.episode)) {
+    lines.push("## 原文", "");
+    d.segments.forEach((s, i) => {
+      if (startsAt.has(i) && s.kind === "h1") return lines.push(...heading(i));
+      if (s.kind === "h1") return lines.push(`### ${s.text}`, "");
+      if (s.kind === "h2") return lines.push(`#### ${s.text}`, "");
+      if (s.kind === "table") return lines.push("```", s.text, "```", "");
+      lines.push(...heading(i), s.text, "");
+    });
+  } else if (parts.includes("transcript") && isArticle(d.episode)) {
     lines.push("## 原文", "");
     if (safeSourceUrl(d.episode.source_url)) lines.push(d.episode.source_url, "");
     d.segments.forEach((s, i) => lines.push(...heading(i), s.text, ""));
@@ -894,14 +978,16 @@ async function loadLibrary() {
 
 function renderLibrary() {
   const keyword = $("filter").value.trim().toLowerCase();
-  const shown = keyword
-    ? allEpisodes.filter((e) =>
+  const project = $("project-filter").value;
+  const shown = allEpisodes.filter(
+    (e) =>
+      (!project || (e.projects || []).includes(project)) &&
+      (!keyword ||
         [e.title, e.podcast_name, ...(e.hashtags || [])]
           .join(" ")
           .toLowerCase()
-          .includes(keyword)
-      )
-    : allEpisodes;
+          .includes(keyword))
+  );
 
   const selected = location.hash.slice(1);
   const groups = [
@@ -922,7 +1008,7 @@ function renderLibrary() {
     .join("");
 
   $("episode-list").innerHTML =
-    html || `<li class="muted">${keyword ? "沒有符合的單集" : "還沒有處理過的單集"}</li>`;
+    html || `<li class="muted">${keyword || project ? "沒有符合的單集" : "還沒有處理過的單集"}</li>`;
 
   $("episode-list").querySelectorAll("li[data-guid]").forEach((li) => {
     li.addEventListener("click", () => {
@@ -933,6 +1019,137 @@ function renderLibrary() {
 }
 
 $("filter").addEventListener("input", renderLibrary);
+$("project-filter").addEventListener("change", renderLibrary);
+
+// ── 研究專案 ────────────────────────────────────────
+// 專案存在資料庫，兩台電腦共用；未上傳的單集也能歸類。
+
+let allProjects = [];
+
+async function loadProjects() {
+  try {
+    allProjects = await api("/api/projects");
+  } catch (err) {
+    // 資料庫連不上或尚未建表時，專案功能停用，不影響其他功能
+    console.error(err);
+    allProjects = [];
+  }
+  renderProjectFilter();
+  if (current) renderEpisodeProjects();
+}
+
+function renderProjectFilter() {
+  const select = $("project-filter");
+  const selected = select.value;
+  select.innerHTML =
+    `<option value="">全部專案</option>` +
+    allProjects
+      .map((p) => `<option value="${p.id}">${escapeHtml(p.name)}（${p.item_count}）</option>`)
+      .join("");
+  // 篩選中的專案被刪除時回到全部
+  select.value = allProjects.some((p) => p.id === selected) ? selected : "";
+}
+
+/** 單集頁的專案區塊：已歸入的標為選取，點一下切換。 */
+function renderEpisodeProjects() {
+  const box = $("episode-projects");
+  const mine = new Set(current.projects || []);
+  box.innerHTML = allProjects.length
+    ? allProjects
+        .map(
+          (p) =>
+            `<button type="button" class="${mine.has(p.id) ? "on" : ""}" data-id="${p.id}" aria-pressed="${mine.has(p.id)}">${escapeHtml(p.name)}</button>`
+        )
+        .join("")
+    : `<p class="muted">還沒有專案，可在下方新增</p>`;
+  box.querySelectorAll("button[data-id]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const ids = new Set(current.projects || []);
+      if (ids.has(btn.dataset.id)) ids.delete(btn.dataset.id);
+      else ids.add(btn.dataset.id);
+      saveEpisodeProjects([...ids]);
+    });
+  });
+}
+
+async function saveEpisodeProjects(ids) {
+  const guid = current.guid;
+  try {
+    const res = await api(`/api/episodes/${guid}/projects`, {
+      method: "PUT",
+      body: { project_ids: ids },
+    });
+    if (current?.guid === guid) current.projects = res.projects;
+    await Promise.all([loadProjects(), loadLibrary()]);
+  } catch (err) {
+    alert(err.message);
+  }
+}
+
+$("new-project-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const name = $("new-project-name").value.trim();
+  if (!name) return;
+  try {
+    const project = await api("/api/projects", { method: "POST", body: { name } });
+    $("new-project-name").value = "";
+    allProjects.push(project);
+    await saveEpisodeProjects([...(current.projects || []), project.id]);
+  } catch (err) {
+    alert(err.message);
+  }
+});
+
+$("btn-manage-projects").addEventListener("click", async () => {
+  await loadProjects();
+  renderProjectManager();
+  $("projects-dialog").showModal();
+});
+
+/** 管理對話框：改名、說明與刪除；新增在單集頁進行（建立時就歸入該集）。 */
+function renderProjectManager() {
+  const list = $("project-manage-list");
+  list.innerHTML = allProjects.length
+    ? allProjects
+        .map(
+          (p) => `<li data-id="${p.id}">
+            <input type="text" name="name" value="${escapeHtml(p.name)}" maxlength="100" aria-label="專案名稱">
+            <button type="button" class="danger" data-action="delete">刪除</button>
+            <textarea name="description" rows="2" maxlength="2000" placeholder="說明（選填）">${escapeHtml(p.description)}</textarea>
+            <span class="count">${p.item_count} 筆內容</span>
+          </li>`
+        )
+        .join("")
+    : `<li class="muted">還沒有專案；在單集頁的「研究專案」區塊新增</li>`;
+
+  list.querySelectorAll("li[data-id]").forEach((li) => {
+    const id = li.dataset.id;
+    li.querySelectorAll("input, textarea").forEach((field) => {
+      field.addEventListener("change", async () => {
+        try {
+          await api(`/api/projects/${id}`, { method: "PUT", body: { [field.name]: field.value } });
+          await loadProjects();
+        } catch (err) {
+          alert(err.message);
+          renderProjectManager();
+        }
+      });
+    });
+    li.querySelector("[data-action=delete]").addEventListener("click", async () => {
+      const name = allProjects.find((p) => p.id === id)?.name || "";
+      if (!confirm(`刪除專案「${name}」？\n只會移除歸類，單集不受影響。`)) return;
+      try {
+        await api(`/api/projects/${id}`, { method: "DELETE" });
+        await Promise.all([loadProjects(), loadLibrary()]);
+        if (current) current.projects = (current.projects || []).filter((p) => p !== id);
+        renderProjectManager();
+        if (current) renderEpisodeProjects();
+      } catch (err) {
+        alert(err.message);
+      }
+    });
+  });
+}
 
 // ── 側邊欄（窄螢幕） ────────────────────────────────
 
@@ -944,15 +1161,17 @@ function closeSidebar() {
   $("sidebar").classList.remove("open");
 }
 
-// 內容類型：YouTube 為影片、文章為文章，其餘平台為音檔（與手機卡片相同）
+// 內容類型：YouTube 為影片、文章與論文各自一類，其餘平台為音檔（與手機卡片相同）
 const EP_KINDS = {
   audio: { icon: "ic-audio", label: "音檔" },
   video: { icon: "ic-video", label: "影片" },
   article: { icon: "ic-article", label: "文章" },
+  paper: { icon: "ic-paper", label: "論文" },
 };
 
 function episodeKind(e) {
-  return e.kind === "article" ? "article" : e.platform === "youtube" ? "video" : "audio";
+  if (e.kind === "article" || e.kind === "paper") return e.kind;
+  return e.platform === "youtube" ? "video" : "audio";
 }
 
 /** 清單卡片左側封面；svg 已由後端過濾。沒有封面時顯示灰色類型 icon。 */
@@ -1056,3 +1275,4 @@ window.addEventListener("hashchange", openFromHash);
 
 loadLibrary().then(openFromHash);
 loadQueue();
+loadProjects();

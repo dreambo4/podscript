@@ -1,0 +1,25 @@
+meta {
+  name: 研究專案清單
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{mobileBase}}/api/projects
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+docs {
+  所有研究專案，依名稱排序：[{"id", "name", "description", "count"}]。
+  count 只算已上傳（episodes 中有）的集數；本機尚未上傳的歸類不計。
+  本機與手機都能建立、修改、刪除專案與歸類。
+}
+
+script:post-response {
+  if (res.status === 200 && res.body.length) bru.setEnvVar("projectId", res.body[0].id);
+}

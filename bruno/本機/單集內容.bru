@@ -16,9 +16,14 @@ docs {
   不含 SPEAKER_00 這類預設編號。未設定 DATABASE_URL 或查詢失敗時只含本機結果。
   文章（episode.platform = article）：segments 每筆是一段正文（start／end 為 0、speaker 為空字串），
   speakers 與 known_speakers 皆為空。
+  論文（episode.platform = paper）：格式同文章，segments 另有 kind 欄位：h1（章標題）、h2（節標題）、
+  table（表格，每列以換行分隔，第一行為表格標題）、ref（一筆參考文獻）；一般段落沒有 kind。
+  summary.chapters 取自論文的章標題（格式同文章）；summary.meta 為模型讀出的書目資料
+  {"title", "journal", "first_author", "published"}，其餘內容為 null。
   summary.chapters 為章節目錄：Podcast 為 [{"start": 秒數, "title": "..."}]，start 等於 segments 中某一段的 start；
-  文章為 [{"paragraph": 段落索引, "title": "..."}]，索引從 0 起算。尚未產生章節時為空陣列。
+  文章與論文為 [{"paragraph": 段落索引, "title": "..."}]，索引從 0 起算。尚未產生章節時為空陣列。
   needs_reupload：已上傳但本機有重新生成的內容尚未再次上傳（本機有 result.json）；
   前端據此顯示「再次上傳」與「放棄重新生成」。
+  projects：這集所屬的研究專案 id 列表；資料庫連不上或尚未建表時為空陣列。
   summary.cover 為封面 {"svg": "...", "color": "#rrggbb"}，svg 為 viewBox 0 0 48 48 的內部元素（已過濾）；尚未產生時為 null。
 }

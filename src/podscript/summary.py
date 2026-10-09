@@ -97,6 +97,44 @@ hashtags 規則：
 - 原文以外的資訊不要寫進摘要與心智圖
 - mindmap 須為可直接渲染的合法 Mermaid 語法，階層以縮排表示"""
 
+# 論文的章節直接用原有的段落標題（見 pipeline），不由模型分章；
+# 改為順便讀出期刊名稱等書目資料，列表上的來源欄位才有意義。
+PAPER_PROMPT = """請讀取 {path}，這是一篇學術論文的全文（由 PDF 擷取，參考文獻已省略）。
+
+產生以下五項，並以 JSON 格式輸出：
+
+1. summary：約 400 字的繁體中文摘要（可依論文份量增減），依序說明研究問題、研究方法、主要發現、研究限制，
+   須涵蓋全文重點，不可只改寫論文的 Abstract；論文未提及限制時寫「作者未明確說明」
+2. mindmap：Mermaid mindmap 語法的架構心智圖，根節點為論文主題，
+   第一層依序為「研究問題」「研究方法」「主要發現」「研究限制」，其下再列細項
+3. hashtags：最多 5 個主題標籤，用於搜尋與分類
+4. meta：論文的書目資料，照抄原文，不翻譯
+5. cover：代表本文內容的封面插圖，顯示在列表卡片上
+
+hashtags 規則：
+- 不得使用人名（作者、文中提及的研究者皆不可）
+- 以主題、領域、概念為準，例如 運動生理、減重、代謝
+- 不含 # 符號，每個標籤 2-6 字，使用繁體中文
+- 標籤之間語意不可重疊，例如「投資理財」與「理財規劃」只能留一個
+- 主題不夠多元時寧可少於 5 個，不要用近義詞湊數
+
+meta 規則：
+- title：論文標題，照抄原文
+- journal：期刊或會議名稱，照抄原文；找不到時為空字串
+- first_author：第一作者的姓（family name）；找不到時為空字串
+- published：發表日期，格式 YYYY-MM-DD；只知道年份時為 YYYY；找不到時為空字串
+
+""" + COVER_RULES + """
+
+輸出格式（只輸出 JSON，不要任何說明文字）：
+{{"summary": "...", "mindmap": "mindmap\\n  root((主題))\\n    研究問題\\n      細項", "hashtags": ["標籤一", "標籤二"], "meta": {{"title": "...", "journal": "...", "first_author": "...", "published": "2009-05-14"}}, """ + COVER_EXAMPLE + """}}
+
+注意：
+- 全文由 PDF 自動擷取，可能夾雜頁首頁尾、圖內文字與亂碼的數學式，請忽略
+- 論文以外的資訊不要寫進摘要與心智圖
+- 專有名詞第一次出現時可附原文，例如「靜態代謝率（REE）」
+- mindmap 須為可直接渲染的合法 Mermaid 語法，階層以縮排表示"""
+
 # 已有摘要的集數只補章節時使用，不重產摘要、心智圖與標籤。
 CHAPTERS_PROMPT = """請讀取 {path}，這是一集 Podcast 的逐字稿。
 
@@ -138,7 +176,7 @@ COVER_PROMPT = """以下是一集節目（或一篇文章）的資訊：
 {{""" + COVER_EXAMPLE + """}}"""
 
 # 依內容類型選用的提示；鍵對應 pipeline 的 content_kind。
-PROMPTS = {"podcast": PROMPT, "article": ARTICLE_PROMPT}
+PROMPTS = {"podcast": PROMPT, "article": ARTICLE_PROMPT, "paper": PAPER_PROMPT}
 CHAPTERS_PROMPTS = {"podcast": CHAPTERS_PROMPT, "article": ARTICLE_CHAPTERS_PROMPT}
 
 # 標籤收斂：生成階段不能讓標籤庫干擾 AI 選字，否則標籤會趨同、失去精準度，
@@ -185,6 +223,8 @@ class Summary:
     chapters: list = field(default_factory=list)
     # 封面 {"svg", "color"}，已過濾；模型沒畫或畫壞時為 None，見 cover.normalize。
     cover: dict | None = None
+    # 論文的書目資料 {"title", "journal", "first_author", "published"}；其他內容為 None。
+    meta: dict | None = None
 
     def to_dict(self) -> dict:
         return {
@@ -193,6 +233,7 @@ class Summary:
             "hashtags": self.hashtags,
             "chapters": self.chapters,
             "cover": self.cover,
+            "meta": self.meta,
             "hashtag_merges": self.hashtag_merges,
             "hashtags_generated": self.hashtags_generated,
             "model": self.model,
@@ -214,7 +255,7 @@ class SummaryProvider(ABC):
         """讀取逐字稿或文章全文，產生摘要與心智圖。
 
         Args:
-            kind: 內容類型，podcast 或 article，決定使用的提示。
+            kind: 內容類型，podcast、article 或 paper，決定使用的提示。
 
         Raises:
             SummaryError: 生成失敗或回傳格式無法解析。
@@ -351,6 +392,7 @@ def _parse_cli_output(stdout: str, *, model: str) -> Summary:
         chapters=payload.get("chapters") if isinstance(payload.get("chapters"), list) else [],
         # 封面同樣不影響摘要，畫壞時為 None。
         cover=cover_module.normalize(payload.get("cover")),
+        meta=_clean_meta(payload.get("meta")),
         model=_resolve_model_id(envelope, fallback=model),
         usage=envelope.get("usage", {}),
     )
@@ -374,6 +416,18 @@ def _resolve_model_id(envelope: dict, *, fallback: str) -> str:
         return item.get("outputTokens", 0) if isinstance(item, dict) else 0
 
     return max(usage_by_model, key=lambda k: output_tokens(usage_by_model[k]))
+
+
+def _clean_meta(raw: object) -> dict | None:
+    """整理論文書目資料：只留字串欄位，去除空白。缺少時為 None，不影響摘要。"""
+    if not isinstance(raw, dict):
+        return None
+    meta = {
+        key: raw[key].strip()
+        for key in ("title", "journal", "first_author", "published")
+        if isinstance(raw.get(key), str) and raw[key].strip()
+    }
+    return meta or None
 
 
 def _clean_hashtags(raw: object) -> list[str]:

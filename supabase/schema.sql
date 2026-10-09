@@ -115,3 +115,31 @@ create table if not exists app_settings (
 );
 
 alter table app_settings enable row level security;
+
+-- ────────────────────────────────────────────────
+-- 研究專案（2026-10-09 新增）：使用者自訂的研究主題，把相關的 Podcast、文章、論文歸在一起。
+-- 與標籤分開：標籤由模型依內容產生，專案由使用者建立與歸類。
+-- 一筆內容可屬於多個專案；尚未上傳的單集也能先歸類，故 project_items 只存 episode_guid、
+-- 不設外鍵到 episodes。刪除單集時由本機服務一併刪除對照列。
+-- 只由本機服務與手機後端以資料庫直連存取，開啟 RLS、不設 policy，擋下 REST API。
+-- ────────────────────────────────────────────────
+create table if not exists projects (
+  id          uuid primary key default gen_random_uuid(),
+  name        text not null unique check (name <> '' and length(name) <= 100),
+  description text not null default '' check (length(description) <= 2000),
+  created_at  timestamptz not null default now(),
+  updated_at  timestamptz not null default now()
+);
+
+create table if not exists project_items (
+  project_id   uuid not null references projects (id) on delete cascade,
+  episode_guid text not null,
+  added_at     timestamptz not null default now(),
+  primary key (project_id, episode_guid)
+);
+
+-- 單集頁查「這集屬於哪些專案」
+create index if not exists project_items_guid_idx on project_items (episode_guid);
+
+alter table projects enable row level security;
+alter table project_items enable row level security;

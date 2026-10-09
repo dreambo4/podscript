@@ -1,0 +1,22 @@
+meta {
+  name: 修改專案
+  type: http
+  seq: 23
+}
+
+put {
+  url: {{localBase}}/api/projects/{{projectId}}
+  body: json
+  auth: none
+}
+
+body:json {
+  {
+    "name": "減脂研究",
+    "description": "飲食與訓練對體脂的影響"
+  }
+}
+
+docs {
+  修改專案名稱或說明；未帶的欄位不變。名稱空白或重複、查無此專案回 400。
+}

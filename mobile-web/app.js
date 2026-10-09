@@ -95,6 +95,7 @@ function showUserInfo() {
   // 登入後深淺色切換收進名稱下拉選單；未登入時保留 topbar 上的按鈕
   document.querySelector("#btn-theme").hidden = true;
   document.querySelector("#btn-tags-entry").hidden = false;
+  document.querySelector("#btn-projects-entry").hidden = false;
   document.querySelector("#btn-favorites-entry").hidden = false;
   return true;
 }
@@ -105,6 +106,7 @@ function hideUserInfo() {
   document.querySelector("#btn-theme").hidden = false;
   setUserMenuOpen(false);
   document.querySelector("#btn-tags-entry").hidden = true;
+  document.querySelector("#btn-projects-entry").hidden = true;
   document.querySelector("#btn-favorites-entry").hidden = true;
 }
 
@@ -170,7 +172,7 @@ async function setFavorite(guid, on) {
 }
 
 // ── 畫面切換 ──────────────────────────────────────
-const VIEWS = ["login", "list-view", "favorites-view", "tags-view", "detail-view"];
+const VIEWS = ["login", "list-view", "favorites-view", "tags-view", "projects-view", "detail-view"];
 
 function showView(id) {
   VIEWS.forEach(v => {
@@ -194,6 +196,10 @@ function showFavorites() {
 
 function showTags() {
   showView("tags-view");
+}
+
+function showProjects() {
+  showView("projects-view");
 }
 
 function showDetail() {
@@ -249,7 +255,9 @@ function sanitizeCoverSvg(markup) {
 const HEX_COLOR = /^#[0-9a-f]{6}$/i;
 
 function episodeKind(ep) {
-  return isArticle(ep) ? "article" : ep.platform === "youtube" ? "video" : "audio";
+  if (isArticle(ep)) return "article";
+  if (isPaper(ep)) return "paper";
+  return ep.platform === "youtube" ? "video" : "audio";
 }
 
 /** 卡片左側封面；沒有封面或過濾後為空時，退回類型 icon。 */
@@ -271,8 +279,10 @@ let currentTags = [];
 let currentTagMode = "any";
 let currentFavoritesOnly = false;
 let currentKind = ""; // "" 為全部，其餘見 EP_KINDS
+let currentProject = ""; // 研究專案 id；"" 為全部
 let channelsLoaded = false;
 let allChannels = [];
+let allProjects = []; // 研究專案清單，見 ensureProjectsLoaded
 
 function formatDuration(sec) {
   if (!sec) return "";
@@ -304,11 +314,12 @@ function snippetHtml(ep) {
   return `<span class="ep-snippet">${highlightHtml(ep.snippet, ep.query, ep.searchOptions)}<span class="ep-match-count">${ep.match_count} 處</span></span>`;
 }
 
-// 內容類型：YouTube 為影片、文章為文章，其餘平台為音檔
+// 內容類型：YouTube 為影片、文章與論文各自一類，其餘平台為音檔
 const EP_KINDS = {
   audio: { icon: "ic-audio", label: "音檔" },
   video: { icon: "ic-video", label: "影片" },
   article: { icon: "ic-article", label: "文章" },
+  paper: { icon: "ic-paper", label: "論文" },
 };
 
 function kindIconHtml(ep) {
@@ -647,6 +658,10 @@ function renderActiveFilters() {
     const { icon, label } = EP_KINDS[currentKind];
     chips.push({ label, icon, onRemove: () => { currentKind = ""; loadList(); } });
   }
+  if (currentProject) {
+    const name = allProjects.find(p => p.id === currentProject)?.name || "研究專案";
+    chips.push({ label: escapeHtml(name), icon: "ic-folder", onRemove: () => { currentProject = ""; loadList(); } });
+  }
   if (currentFavoritesOnly) {
     chips.push({ label: "只看收藏", icon: "ic-heart-fill", onRemove: () => { currentFavoritesOnly = false; loadList(); } });
   }
@@ -669,7 +684,7 @@ function renderActiveFilters() {
 }
 
 function updateFilterDot() {
-  const active = !!(currentChannel || currentTags.length || currentKind || currentFavoritesOnly);
+  const active = !!(currentChannel || currentTags.length || currentKind || currentProject || currentFavoritesOnly);
   document.querySelector("#filter-dot").hidden = !active;
   document.querySelector("#btn-open-filter").classList.toggle("active", active);
 }
@@ -689,14 +704,30 @@ async function ensureChannelsLoaded() {
   channelsLoaded = true;
 }
 
+let projectsLoaded = false;
+
+/** 研究專案清單；專案頁每次進入都會重抓，這裡只在第一次載入列表時抓。 */
+async function ensureProjectsLoaded() {
+  if (projectsLoaded) return;
+  try {
+    allProjects = await api("/projects");
+  } catch (err) {
+    // 專案是附屬功能，抓不到時不影響列表
+    console.error(err);
+    allProjects = [];
+  }
+  projectsLoaded = true;
+}
+
 async function loadList({ quiet = false } = {}) {
   const requestId = ++listRequestId;
 
   // 待處理清單與集數列表互不相依，平行拉取，失敗各自處理
   loadQueue();
 
-  await ensureChannelsLoaded();
+  await Promise.all([ensureChannelsLoaded(), ensureProjectsLoaded()]);
   renderSheetChannelChips();
+  renderSheetProjectChips();
   renderActiveFilters();
   updateFilterDot();
 
@@ -709,6 +740,7 @@ async function loadList({ quiet = false } = {}) {
   query.set("tag_mode", currentTagMode);
   if (currentChannel) query.set("channel", currentChannel);
   if (currentKind) query.set("kind", currentKind);
+  if (currentProject) query.set("project", currentProject);
   if (currentFavoritesOnly) query.set("favorites_only", "true");
   query.set("sort", getSort());
   query.set("limit", 500); // 一次性全拉，見 spec §5.5 未來優化項目
@@ -926,6 +958,24 @@ let sheetSort = getSort();
 let sheetChannel = currentChannel;
 let sheetFavoritesOnly = currentFavoritesOnly;
 let sheetKind = currentKind;
+let sheetProject = currentProject;
+
+function renderSheetProjectChips() {
+  document.querySelector("#sheet-project-group").hidden = allProjects.length === 0;
+  const container = document.querySelector("#sheet-project-chips");
+  const allChip = `<button type="button" class="sheet-chip${sheetProject === "" ? " active" : ""}" data-project="">全部</button>`;
+  const chips = allProjects.map(p =>
+    `<button type="button" class="sheet-chip${sheetProject === p.id ? " active" : ""}" data-project="${p.id}">${escapeHtml(p.name)}（${p.count}）</button>`
+  );
+  container.innerHTML = allChip + chips.join("");
+
+  container.querySelectorAll(".sheet-chip").forEach(btn => {
+    btn.addEventListener("click", () => {
+      sheetProject = btn.dataset.project;
+      container.querySelectorAll(".sheet-chip").forEach(b => b.classList.toggle("active", b === btn));
+    });
+  });
+}
 
 function syncSheetKindChips() {
   document.querySelectorAll("#filter-sheet [data-kind]").forEach(btn => {
@@ -954,8 +1004,10 @@ function openFilterSheet() {
   sheetChannel = currentChannel;
   sheetFavoritesOnly = currentFavoritesOnly;
   sheetKind = currentKind;
+  sheetProject = currentProject;
 
   renderSheetChannelChips();
+  renderSheetProjectChips();
   syncSheetKindChips();
   document.querySelectorAll("#filter-sheet [data-sort]").forEach(btn => {
     btn.classList.toggle("active", btn.dataset.sort === sheetSort);
@@ -998,8 +1050,10 @@ document.querySelector("#sheet-clear").addEventListener("click", () => {
   sheetSort = "created_at";
   sheetFavoritesOnly = false;
   sheetKind = "";
+  sheetProject = "";
   currentTags = [];
   renderSheetChannelChips();
+  renderSheetProjectChips();
   syncSheetKindChips();
   document.querySelectorAll("#filter-sheet [data-sort]").forEach(btn => btn.classList.toggle("active", btn.dataset.sort === sheetSort));
   document.querySelector("#sheet-favorites-only").classList.remove("active");
@@ -1009,6 +1063,7 @@ document.querySelector("#sheet-apply").addEventListener("click", () => {
   currentChannel = sheetChannel;
   currentFavoritesOnly = sheetFavoritesOnly;
   currentKind = sheetKind;
+  currentProject = sheetProject;
   localStorage.setItem(SORT_KEY, sheetSort);
   closeFilterSheet();
   loadList();
@@ -1145,6 +1200,166 @@ document.querySelector("#btn-tags-entry").addEventListener("click", () => {
   location.hash = "#/tags";
 });
 
+// ── 研究專案 ──────────────────────────────────────
+// 手機只瀏覽：列出專案，點進去即以該專案篩選列表；建立與歸類在本機網頁進行。
+async function loadProjectsView() {
+  const loading = document.querySelector("#projects-loading");
+  const list = document.querySelector("#projects-list");
+  loading.hidden = false;
+  try {
+    allProjects = await api("/projects");
+    projectsLoaded = true;
+  } finally {
+    loading.hidden = true;
+  }
+
+  document.querySelector("#projects-empty").hidden = allProjects.length > 0;
+  list.innerHTML = allProjects
+    .map(p => `<div class="project-card">
+      <a class="project-card-link" href="#/?project=${encodeURIComponent(p.id)}">
+        <span class="project-card-head">
+          <svg class="icon icon-sm"><use href="#ic-folder"/></svg>
+          <span class="project-card-name">${escapeHtml(p.name)}</span>
+          <span class="project-card-count">${p.count} 筆</span>
+        </span>
+        ${p.description ? `<span class="project-card-desc">${escapeHtml(p.description)}</span>` : ""}
+      </a>
+      <button type="button" class="icon-btn project-card-edit" data-id="${p.id}" aria-label="編輯「${escapeHtml(p.name)}」">
+        <svg class="icon icon-sm"><use href="#ic-edit"/></svg>
+      </button>
+    </div>`)
+    .join("");
+  list.querySelectorAll(".project-card-edit").forEach(btn => {
+    btn.addEventListener("click", () => openProjectSheet(btn.dataset.id));
+  });
+}
+
+/** api() 的 JSON request body 與對應的 Content-Type。 */
+function jsonBody(data) {
+  return { headers: { "Content-Type": "application/json" }, body: JSON.stringify(data) };
+}
+
+/** 新增專案；從單集頁新增時順便把該集歸入。回傳新專案。 */
+async function createProject(name) {
+  const project = await api("/projects", { method: "POST", ...jsonBody({ name }) });
+  allProjects = [...allProjects, project].sort((a, b) => a.name.localeCompare(b.name));
+  return project;
+}
+
+document.querySelector("#new-project-form").addEventListener("submit", async e => {
+  e.preventDefault();
+  const input = document.querySelector("#new-project-name");
+  const name = input.value.trim();
+  if (!name) return;
+  try {
+    await createProject(name);
+    input.value = "";
+    await loadProjectsView();
+  } catch (err) {
+    alert(err.message);
+  }
+});
+
+// 編輯 sheet：改名、說明、刪除
+let editingProjectId = null;
+
+function openProjectSheet(id) {
+  const project = allProjects.find(p => p.id === id);
+  if (!project) return;
+  editingProjectId = id;
+  document.querySelector("#project-sheet-name").value = project.name;
+  document.querySelector("#project-sheet-desc").value = project.description || "";
+  document.querySelector("#project-sheet").hidden = false;
+}
+
+function closeProjectSheet() {
+  document.querySelector("#project-sheet").hidden = true;
+  editingProjectId = null;
+}
+
+document.querySelector("#project-sheet").addEventListener("click", e => {
+  if (e.target.id === "project-sheet") closeProjectSheet();
+});
+document.querySelector("#project-sheet-cancel").addEventListener("click", closeProjectSheet);
+
+document.querySelector("#project-sheet-form").addEventListener("submit", async e => {
+  e.preventDefault();
+  try {
+    await api(`/projects/${editingProjectId}`, {
+      method: "PUT",
+      ...jsonBody({
+        name: document.querySelector("#project-sheet-name").value,
+        description: document.querySelector("#project-sheet-desc").value,
+      }),
+    });
+    closeProjectSheet();
+    await loadProjectsView();
+  } catch (err) {
+    alert(err.message);
+  }
+});
+
+document.querySelector("#project-sheet-delete").addEventListener("click", async () => {
+  const project = allProjects.find(p => p.id === editingProjectId);
+  if (!project || !confirm(`刪除專案「${project.name}」？\n只會移除歸類，單集不受影響。`)) return;
+  try {
+    await api(`/projects/${editingProjectId}`, { method: "DELETE" });
+    if (currentProject === editingProjectId) currentProject = "";
+    closeProjectSheet();
+    await loadProjectsView();
+  } catch (err) {
+    alert(err.message);
+  }
+});
+
+// 單集頁：所有專案列成可切換的標籤，已歸入的標為選取；可直接新增並歸入
+function renderEpisodeProjects(ep) {
+  const box = document.querySelector("#ep-projects");
+  const mine = new Set((ep.projects || []).map(p => p.id));
+  box.innerHTML = allProjects
+    .map(p => `<button type="button" class="project-toggle${mine.has(p.id) ? " on" : ""}" data-id="${p.id}" aria-pressed="${mine.has(p.id)}">
+      <svg class="icon icon-xs"><use href="#ic-folder"/></svg>${escapeHtml(p.name)}
+    </button>`)
+    .join("") + `<button type="button" class="project-toggle project-add">＋ 新增專案</button>`;
+
+  box.querySelectorAll(".project-toggle[data-id]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const ids = new Set(mine);
+      if (ids.has(btn.dataset.id)) ids.delete(btn.dataset.id);
+      else ids.add(btn.dataset.id);
+      saveEpisodeProjects(ep, [...ids]);
+    });
+  });
+  box.querySelector(".project-add").addEventListener("click", async () => {
+    const name = (prompt("新專案名稱") || "").trim();
+    if (!name) return;
+    try {
+      const project = await createProject(name);
+      await saveEpisodeProjects(ep, [...mine, project.id]);
+    } catch (err) {
+      alert(err.message);
+    }
+  });
+}
+
+async function saveEpisodeProjects(ep, ids) {
+  try {
+    const res = await api(`/episodes/${encodeURIComponent(ep.episode_guid)}/projects`, {
+      method: "PUT",
+      ...jsonBody({ project_ids: ids }),
+    });
+    ep.projects = res.projects.map(id => ({ id, name: allProjects.find(p => p.id === id)?.name || "" }));
+    projectsLoaded = false; // 篇數變了，下次列表重新抓
+    if (detailEp === ep) renderEpisodeProjects(ep);
+  } catch (err) {
+    alert(err.message);
+  }
+}
+
+document.querySelector("#btn-projects-entry").addEventListener("click", () => {
+  location.hash = "#/projects";
+});
+
 // ── 詳細頁 ────────────────────────────────────────
 function formatTime(sec) {
   const m = Math.floor(sec / 60);
@@ -1156,6 +1371,15 @@ const PLATFORM_LABELS = { apple: "Apple Podcasts", youtube: "YouTube", article: 
 
 function isArticle(ep) {
   return ep?.platform === "article";
+}
+
+function isPaper(ep) {
+  return ep?.platform === "paper";
+}
+
+/** 文章與論文：沒有音檔與說話者，以段落定位。 */
+function isText(ep) {
+  return isArticle(ep) || isPaper(ep);
 }
 
 /**
@@ -1188,7 +1412,8 @@ function renderSourceLink(ep) {
 function renderTranscript(ep, query = "", options = {}) {
   const container = document.querySelector("#transcript");
   renderChapters(ep);
-  const article = isArticle(ep);
+  const article = isText(ep);
+  const paper = isPaper(ep);
   const segments = ep.transcript || [];
   const speakers = ep.speakers || {};
   const chapters = ep.chapters || [];
@@ -1210,6 +1435,12 @@ function renderTranscript(ep, query = "", options = {}) {
       html.push(`<section class="chapter">`);
     }
 
+    // 論文的章標題就是章節標題，上面已顯示，不重複
+    if (paper && index !== undefined && seg.kind === "h1") return;
+    if (paper) {
+      html.push(paperSegmentHtml(seg, highlightHtml(seg.text, query, options)));
+      return;
+    }
     // 文章只有段落，沒有時間與說話者
     if (article) {
       html.push(`<p>${highlightHtml(seg.text, query, options)}</p>`);
@@ -1232,6 +1463,23 @@ function renderTranscript(ep, query = "", options = {}) {
   if (chapters.length) html.push("</section>");
   container.innerHTML = article ? `<div class="article-text">${html.join("")}</div>` : html.join("");
   chapterScrubber.refresh(container.querySelectorAll(".chapter[id]").length >= 2);
+}
+
+/** 表格：第一行是表格標題時獨立成段落正常換行，表格列才用等寬字逐列顯示。rows 已跳脫。 */
+function paperTableHtml(rows) {
+  const caption = /^(table|tab\.|表)\s*\S/i.test(rows[0]) ? rows.shift() : "";
+  return `${caption ? `<p class="paper-table-caption">${caption}</p>` : ""}${
+    rows.length ? `<pre class="paper-table">${rows.join("\n")}</pre>` : ""
+  }`;
+}
+
+/** 論文段落依類型顯示：章節標題、表格（每列一行）、參考文獻。content 為已跳脫並標亮的文字。 */
+function paperSegmentHtml(seg, content) {
+  if (seg.kind === "h1") return `<h4 class="paper-heading">${content}</h4>`;
+  if (seg.kind === "h2") return `<h5 class="paper-subheading">${content}</h5>`;
+  if (seg.kind === "table") return paperTableHtml(content.split("\n"));
+  if (seg.kind === "ref") return `<p class="paper-ref">${content}</p>`;
+  return `<p>${content}</p>`;
 }
 
 /**
@@ -1257,7 +1505,7 @@ function renderChapters(ep) {
     return;
   }
 
-  const article = isArticle(ep);
+  const article = isText(ep);
   el.innerHTML = `<details class="chapters-toc" open>
     <summary>章節（${chapters.length}）</summary>
     <ol>${chapters
@@ -1402,10 +1650,13 @@ async function loadDetail(guid, query = "", options = {}) {
   document.querySelector("#ep-meta").textContent =
     `${ep.podcast_name}${ep.published_at ? " · " + ep.published_at.slice(0, 10) : ""}${ep.duration_sec ? " · " + formatDuration(ep.duration_sec) : ""}`;
   renderSourceLink(ep);
-  document.querySelector('.subtab[data-sub="transcript"]').textContent = isArticle(ep) ? "原文" : "逐字稿";
+  document.querySelector('.subtab[data-sub="transcript"]').textContent = isText(ep) ? "原文" : "逐字稿";
   document.querySelector("#summary-text").textContent = ep.summary || "（尚無摘要）";
   document.querySelector("#hashtags").innerHTML =
     (ep.hashtags || []).map(t => `<a href="#/?tag=${encodeURIComponent(t)}"><span><svg class="icon icon-xs"><use href="#ic-tag"/></svg>${t}</span></a>`).join("");
+
+  await ensureProjectsLoaded();
+  renderEpisodeProjects(ep);
 
   setDetailFavoriteIcon(ep.is_favorite);
 
@@ -1478,11 +1729,21 @@ async function route() {
     } else if (path === "#/tags") {
       showTags();
       await loadTagsView();
+    } else if (path === "#/projects") {
+      showProjects();
+      await loadProjectsView();
     } else {
       const tagParam = params.get("tag");
       if (tagParam) {
         currentTags = [tagParam];
         currentTagMode = "any";
+      }
+      // 從專案頁或單集頁的專案連結進來：只看這個專案
+      const projectParam = params.get("project");
+      if (projectParam) {
+        currentProject = projectParam;
+        // 網址拿掉參數，之後清除篩選、重新整理才不會又套回去；replaceState 不觸發 hashchange
+        history.replaceState(null, "", "#/");
       }
       // manifest 的「加入待處理」捷徑會帶 queue=open，直接展開該區
       if (params.get("queue") === "open") setQueueOpen(true);
@@ -1543,6 +1804,7 @@ function ptrCurrentLoader() {
   if (!document.querySelector("#list-view").hidden) return () => loadList({ quiet: true });
   if (!document.querySelector("#favorites-view").hidden) return () => loadFavorites({ quiet: true });
   if (!document.querySelector("#tags-view").hidden) return () => loadTagsView();
+  if (!document.querySelector("#projects-view").hidden) return () => loadProjectsView();
   return null;
 }
 

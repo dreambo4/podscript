@@ -1,0 +1,15 @@
+meta {
+  name: 刪除專案
+  type: http
+  seq: 24
+}
+
+delete {
+  url: {{localBase}}/api/projects/{{projectId}}
+  body: none
+  auth: none
+}
+
+docs {
+  刪除研究專案；歸類關係連帶刪除（on delete cascade），單集本身不受影響。查無此專案回 400。
+}

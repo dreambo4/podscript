@@ -36,7 +36,7 @@
 <meta name="twitter:description" content="Podcast 逐字稿工具：分角色逐字稿、摘要、心智圖">
 <meta name="twitter:image" content="icons/og-image.png">
 
-<link rel="stylesheet" href="style.css?v=e6821b8066b9">
+<link rel="stylesheet" href="style.css?v=90b84f2f2d41">
 <script src="config.js"></script>
 </head>
 <body>
@@ -46,6 +46,13 @@
     <symbol id="ic-tag" viewBox="0 0 24 24">
       <path d="M11.6 3H5a2 2 0 0 0-2 2v6.6c0 .53.21 1.04.586 1.414l8.4 8.4a2 2 0 0 0 2.828 0l6.6-6.6a2 2 0 0 0 0-2.828l-8.4-8.4A2 2 0 0 0 11.6 3Z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>
       <circle cx="8.2" cy="8.2" r="1.4" fill="currentColor"/>
+    </symbol>
+    <symbol id="ic-folder" viewBox="0 0 24 24">
+      <path d="M3.5 7.5v10a2 2 0 0 0 2 2h13a2 2 0 0 0 2-2V9.5a2 2 0 0 0-2-2h-6.2L10.5 5h-5a2 2 0 0 0-2 2z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>
+    </symbol>
+    <symbol id="ic-edit" viewBox="0 0 24 24">
+      <path d="M4 20h4L19 9a2.1 2.1 0 0 0-3-3L5 17z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>
+      <path d="M14 8l3 3" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
     </symbol>
     <symbol id="ic-heart" viewBox="0 0 24 24">
       <path d="M12 20.2s-7.5-4.53-10-9.24C.4 7.86 2 4.3 5.6 3.7c2.1-.35 4 .66 6.4 3 2.4-2.34 4.3-3.35 6.4-3 3.6.6 5.2 4.16 3.6 7.26-2.5 4.71-10 9.24-10 9.24Z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>
@@ -83,6 +90,11 @@
     <symbol id="ic-video" viewBox="0 0 24 24">
       <rect x="3.5" y="5.5" width="17" height="13" rx="3" fill="none" stroke="currentColor" stroke-width="1.6"/>
       <path d="M10.3 9.4v5.2l4.4-2.6z" fill="currentColor" stroke="currentColor" stroke-width="1" stroke-linejoin="round"/>
+    </symbol>
+    <symbol id="ic-paper" viewBox="0 0 24 24">
+      <path d="M14 3.5H7a1.5 1.5 0 0 0-1.5 1.5v14A1.5 1.5 0 0 0 7 20.5h10a1.5 1.5 0 0 0 1.5-1.5V8z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>
+      <path d="M14 3.5V8h4.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>
+      <path d="M8.5 12h7M8.5 15h7M8.5 18h4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
     </symbol>
     <symbol id="ic-article" viewBox="0 0 24 24">
       <path d="M16.5 19H5a1.5 1.5 0 0 1-1.5-1.5V5.5a1 1 0 0 1 1-1h11a1 1 0 0 1 1 1V17.5a1.5 1.5 0 0 0 3 0V9h-3" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>
@@ -137,6 +149,9 @@
   </button>
   <button id="btn-tags-entry" class="icon-btn" type="button" aria-label="標籤總覽" hidden>
     <svg class="icon"><use href="#ic-tag"/></svg>
+  </button>
+  <button id="btn-projects-entry" class="icon-btn" type="button" aria-label="研究專案" hidden>
+    <svg class="icon"><use href="#ic-folder"/></svg>
   </button>
   <button id="btn-favorites-entry" class="icon-btn" type="button" aria-label="我的收藏" hidden>
     <svg class="icon" id="favorites-entry-icon"><use href="#ic-heart"/></svg>
@@ -237,6 +252,20 @@
     </div>
   </section>
 
+  <section id="projects-view" class="view" hidden>
+    <form id="new-project-form" class="new-project">
+      <input id="new-project-name" type="text" placeholder="新增研究專案…" maxlength="100" enterkeyhint="done">
+      <button type="submit">新增</button>
+    </form>
+    <p id="projects-loading" class="muted loading-row" hidden><span class="spinner"></span> 載入中…</p>
+    <div id="projects-list" class="project-list"></div>
+    <div id="projects-empty" class="empty-state" hidden>
+      <svg class="icon icon-lg"><use href="#ic-folder"/></svg>
+      <p>還沒有研究專案</p>
+      <p class="muted">在上方新增，再到單集頁把內容歸入專案</p>
+    </div>
+  </section>
+
   <section id="tags-view" class="view" hidden>
     <input id="tag-search" type="search" placeholder="搜尋標籤…" class="tag-search">
 
@@ -284,6 +313,10 @@
       <div class="block">
         <p id="summary-text"></p>
         <p id="hashtags" class="tags"></p>
+        <div class="ep-projects-block">
+          <span class="sheet-label">研究專案</span>
+          <div id="ep-projects" class="project-toggles"></div>
+        </div>
         <div class="mindmap-wrap" id="mindmap-wrap" hidden>
           <div id="mindmap"></div>
           <button id="btn-mindmap-full" class="mindmap-full-btn" type="button">
@@ -324,6 +357,27 @@
 
 </main>
 
+<div id="project-sheet" class="sheet-wrap" hidden>
+  <form id="project-sheet-form" class="sheet">
+    <h3>編輯研究專案</h3>
+    <div class="sheet-group">
+      <label class="sheet-label" for="project-sheet-name">名稱</label>
+      <input id="project-sheet-name" class="sheet-input" type="text" maxlength="100" required>
+    </div>
+    <div class="sheet-group">
+      <label class="sheet-label" for="project-sheet-desc">說明（選填）</label>
+      <textarea id="project-sheet-desc" class="sheet-input" rows="3" maxlength="2000"></textarea>
+    </div>
+    <div class="sheet-actions">
+      <button type="button" id="project-sheet-delete" class="danger">
+        <svg class="icon icon-xs"><use href="#ic-trash"/></svg> 刪除
+      </button>
+      <button type="button" id="project-sheet-cancel">取消</button>
+      <button type="submit" class="primary">儲存</button>
+    </div>
+  </form>
+</div>
+
 <div id="filter-sheet" class="sheet-wrap" hidden>
   <div class="sheet">
     <h3>篩選與排序</h3>
@@ -333,6 +387,11 @@
       <div id="sheet-channel-chips" class="sheet-chips"></div>
     </div>
 
+    <div class="sheet-group" id="sheet-project-group" hidden>
+      <span class="sheet-label">研究專案</span>
+      <div id="sheet-project-chips" class="sheet-chips"></div>
+    </div>
+
     <div class="sheet-group">
       <span class="sheet-label">類型</span>
       <div class="sheet-chips">
@@ -340,6 +399,7 @@
         <button type="button" class="sheet-chip" data-kind="audio"><svg class="icon icon-xs"><use href="#ic-audio"/></svg> 音檔</button>
         <button type="button" class="sheet-chip" data-kind="video"><svg class="icon icon-xs"><use href="#ic-video"/></svg> 影片</button>
         <button type="button" class="sheet-chip" data-kind="article"><svg class="icon icon-xs"><use href="#ic-article"/></svg> 文章</button>
+        <button type="button" class="sheet-chip" data-kind="paper"><svg class="icon icon-xs"><use href="#ic-paper"/></svg> 論文</button>
       </div>
     </div>
 
@@ -392,7 +452,7 @@
   // markmap 從 CDN 載入，可能晚於詳情頁資料到達；通知 app.js 補畫。
   window.dispatchEvent(new Event("markmap-ready"));
 </script>
-<script src="app.js?v=aef75a9c38d2"></script>
+<script src="app.js?v=280ec48462e0"></script>
 <script src="https://accounts.google.com/gsi/client" async defer onload="initGoogleSignIn()"></script>
 </body>
 </html>

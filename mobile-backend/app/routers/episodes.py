@@ -1,5 +1,6 @@
 import re
 from typing import Literal
+from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
@@ -60,11 +61,12 @@ WORD_CHAR = re.compile(r"[A-Za-z0-9_]")
 NOT_WORD_BEFORE = "(?<![A-Za-z0-9_])"
 NOT_WORD_AFTER = "(?![A-Za-z0-9_])"
 
-# 類型篩選：YouTube 為影片、文章為文章，其餘平台皆視為音檔
+# 類型篩選：YouTube 為影片、文章與論文各自一類，其餘平台皆視為音檔
 KIND_CONDITIONS = {
-    "audio": "coalesce(e.platform, '') not in ('youtube', 'article')",
+    "audio": "coalesce(e.platform, '') not in ('youtube', 'article', 'paper')",
     "video": "e.platform = 'youtube'",
     "article": "e.platform = 'article'",
+    "paper": "e.platform = 'paper'",
 }
 
 SORT_COLUMNS = {
@@ -130,12 +132,14 @@ def list_episodes(
     tags: list[str] | None = Query(None, description="依多個標籤篩選，搭配 tag_mode"),
     tag_mode: Literal["all", "any"] = Query("all", description="all=須同時包含全部標籤，any=符合任一標籤"),
     channel: str | None = Query(None, description="依頻道（podcast_name）篩選"),
-    kind: Literal["audio", "video", "article"] | None = Query(
-        None, description="依類型篩選：audio=音檔（YouTube 與文章以外）、video=影片（YouTube）、article=文章"
+    kind: Literal["audio", "video", "article", "paper"] | None = Query(
+        None,
+        description="依類型篩選：audio=音檔（YouTube、文章、論文以外）、video=影片（YouTube）、article=文章、paper=論文",
     ),
     case_sensitive: bool = Query(False, description="搜尋時大小寫須相符"),
     whole_word: bool = Query(False, description="搜尋時全字拼寫須相符（字只算英數與底線）"),
     favorites_only: bool = Query(False, description="只列出目前使用者收藏的集數"),
+    project: UUID | None = Query(None, description="只列出屬於此研究專案（projects.id）的集數"),
     sort: Literal["created_at", "published_at"] = Query("created_at", description="排序基準"),
     limit: int = Query(20, ge=1, le=1000),
     offset: int = Query(0, ge=0),
@@ -173,6 +177,12 @@ def list_episodes(
 
     if favorites_only:
         where.append("f.episode_id is not null")
+
+    if project:
+        where.append(
+            "e.episode_guid in (select episode_guid from project_items where project_id = %s)"
+        )
+        params.append(project)
 
     where_sql = f"where {' and '.join(where)}" if where else ""
     sort_column = SORT_COLUMNS[sort]
@@ -227,6 +237,14 @@ def get_episode(guid: str, user: dict = Depends(get_current_user)) -> dict:
                 (user["id"], guid),
             )
             row = cur.fetchone()
+            if row:
+                cur.execute(
+                    "select p.id, p.name from projects p"
+                    " join project_items i on i.project_id = p.id"
+                    " where i.episode_guid = %s order by p.name",
+                    (guid,),
+                )
+                projects = [{"id": str(r[0]), "name": r[1]} for r in cur.fetchall()]
 
     if not row:
         raise HTTPException(status_code=404, detail="集數不存在")
@@ -249,6 +267,7 @@ def get_episode(guid: str, user: dict = Depends(get_current_user)) -> dict:
         "source_url": row[14],
         "chapters": row[15] or [],
         "cover": row[16],
+        "projects": projects,
     }
 
 

@@ -1,0 +1,27 @@
+meta {
+  name: 新增專案
+  type: http
+  seq: 22
+}
+
+post {
+  url: {{localBase}}/api/projects
+  body: json
+  auth: none
+}
+
+body:json {
+  {
+    "name": "減脂研究",
+    "description": ""
+  }
+}
+
+docs {
+  建立研究專案，回傳 {"id", "name", "description", "created_at", "item_count": 0}。
+  名稱空白或與既有專案重複回 400。
+}
+
+script:post-response {
+  if (res.status === 200 && res.body.id) bru.setEnvVar("projectId", res.body.id);
+}

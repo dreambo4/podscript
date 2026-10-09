@@ -19,7 +19,7 @@ from pathlib import Path
 
 import psycopg
 
-from . import diarize, pipeline
+from . import diarize, pipeline, storage
 from .summary import pending_hashtag_merges
 from .resolvers import Episode
 
@@ -86,6 +86,8 @@ def upload(directory: Path, *, discard: bool = True) -> dict:
         raise UploadError(f"還有 {len(pending)} 個標籤合併尚未確認，確認後才能上傳")
 
     payload = build_payload(directory)
+    # 論文的 PDF 原檔先存到 Storage：上傳後本機目錄會清除，原檔只剩這一份
+    _upload_paper_pdf(directory)
 
     try:
         with psycopg.connect(url, connect_timeout=CONNECT_TIMEOUT) as conn:
@@ -107,6 +109,23 @@ def upload(directory: Path, *, discard: bool = True) -> dict:
     }
 
 
+def _upload_paper_pdf(directory: Path) -> None:
+    """本機有論文 PDF 時上傳到 Storage；已上傳過的論文本機沒有 PDF，略過。
+
+    Raises:
+        UploadError: Storage 未設定或上傳失敗。此時不寫資料庫，避免本機清除後原檔遺失。
+    """
+    pdf = directory / pipeline.PAPER_PDF
+    if not pdf.exists():
+        return
+    info_path = directory / pipeline.PAPER_PDF_INFO
+    info = json.loads(info_path.read_text(encoding="utf-8")) if info_path.exists() else {}
+    try:
+        storage.upload_paper(pdf, filename=info.get("filename") or None)
+    except storage.StorageError as exc:
+        raise UploadError(f"PDF 原檔上傳失敗：{exc}") from exc
+
+
 def discard_audio(directory: Path) -> dict:
     """手動清除該集的本機檔案。
 
@@ -123,7 +142,7 @@ def discard_audio(directory: Path) -> dict:
 def delete_episode(directory: Path) -> dict:
     """永久刪除單集：資料庫那一列與本機目錄一併清除。
 
-    收藏由 favorites 的 on delete cascade 連帶刪除。
+    收藏由 favorites 的 on delete cascade 連帶刪除；論文另刪 Storage 的 PDF 原檔。
     先刪資料庫再刪本機：資料庫失敗時本機檔案仍在，不會兩頭落空。
 
     Returns:
@@ -145,6 +164,12 @@ def delete_episode(directory: Path) -> dict:
                     deleted = cur.rowcount > 0
         except psycopg.Error as exc:
             raise UploadError(f"刪除資料庫資料失敗：{exc}") from exc
+
+    if deleted and directory.name.startswith("paper-"):
+        try:
+            storage.delete_paper(directory.name)
+        except storage.StorageError as exc:
+            raise UploadError(f"資料庫已刪除，但 PDF 原檔刪除失敗：{exc}") from exc
 
     return {"deleted_db": deleted, "freed_bytes": _remove_local(directory)}
 
@@ -198,8 +223,8 @@ def build_payload(directory: Path) -> dict:
         "transcript": json.dumps(segments, ensure_ascii=False),
         "speakers": json.dumps(result.speakers, ensure_ascii=False),
         "provenance": json.dumps(result.provenance.to_dict(), ensure_ascii=False),
-        # jsonb 無法建 trgm 索引，另存攤平的純文字供中文搜尋；文章保留段落分隔
-        "transcript_text": ("\n" if pipeline.is_article(episode) else "").join(
+        # jsonb 無法建 trgm 索引，另存攤平的純文字供中文搜尋；文章與論文保留段落分隔
+        "transcript_text": ("\n" if pipeline.is_text(episode) else "").join(
             seg.text for seg in result.segments
         ),
         "chapters": json.dumps(summary.get("chapters") or [], ensure_ascii=False),

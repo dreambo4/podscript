@@ -1,0 +1,26 @@
+meta {
+  name: 設定單集專案
+  type: http
+  seq: 5
+}
+
+put {
+  url: {{mobileBase}}/api/episodes/{{guid}}/projects
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+body:json {
+  {
+    "project_ids": ["{{projectId}}"]
+  }
+}
+
+docs {
+  把這集的所屬專案整組設為 project_ids（不在其中的移除），回傳 {"projects": [id, ...]}。
+  手機只能歸類已上傳的集數：集數不存在回 404；專案已被刪除回 400；id 不是 UUID 回 422。
+}

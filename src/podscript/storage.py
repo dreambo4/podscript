@@ -65,11 +65,14 @@ def paper_guid(pdf: bytes) -> str:
     return "paper-" + hashlib.sha256(pdf).hexdigest()[:16]
 
 
-def upload_paper(path: Path, *, source_url: str | None = None) -> str:
+def upload_paper(
+    path: Path, *, source_url: str | None = None, filename: str | None = None
+) -> str:
     """上傳 PDF 原檔，回傳 guid；已存在時覆蓋。
 
     Args:
         source_url: 論文的下載來源，存在物件的 metadata。
+        filename: 記在 metadata 的原始檔名，省略則用 path 的檔名。
 
     Raises:
         StorageError: 不是 PDF、未設定金鑰或上傳失敗。
@@ -79,7 +82,7 @@ def upload_paper(path: Path, *, source_url: str | None = None) -> str:
         raise StorageError(f"不是 PDF 檔：{path.name}")
 
     guid = paper_guid(data)
-    metadata = {"filename": path.name}
+    metadata = {"filename": filename or path.name}
     if source_url:
         metadata["source_url"] = source_url
 
@@ -94,6 +97,27 @@ def download_paper(guid: str, dest: Path) -> Path:
         StorageError: 未設定金鑰、找不到檔案或下載失敗。
     """
     return _download(PAPERS_BUCKET, f"{guid}.pdf", dest)
+
+
+def fetch_paper(guid: str) -> bytes:
+    """取得 PDF 原檔內容，供本機網頁直接開啟。
+
+    Raises:
+        StorageError: 未設定金鑰、找不到檔案或下載失敗。
+    """
+    response = _request("GET", f"object/authenticated/{PAPERS_BUCKET}/{quote(guid)}.pdf")
+    _raise_for_status(response, "下載")
+    return response.content
+
+
+def delete_paper(guid: str) -> None:
+    """刪除 PDF 原檔；檔案不存在時不視為錯誤。
+
+    Raises:
+        StorageError: 未設定金鑰或刪除失敗。
+    """
+    response = _request("DELETE", f"object/{PAPERS_BUCKET}", json={"prefixes": [f"{guid}.pdf"]})
+    _raise_for_status(response, "刪除")
 
 
 def list_papers() -> list[StoredPaper]:

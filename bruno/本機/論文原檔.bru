@@ -1,0 +1,17 @@
+meta {
+  name: 論文原檔
+  type: http
+  seq: 20
+}
+
+get {
+  url: {{localBase}}/api/episodes/{{guid}}/pdf
+  body: none
+  auth: none
+}
+
+docs {
+  回傳論文的 PDF 原檔（application/pdf，inline），本機網頁「開啟 PDF 原檔」連結使用。
+  尚未上傳者讀本機的 source.pdf；已上傳者（本機已清除）從 Storage 的 papers bucket 取得，需 .env 的 SUPABASE_URL 與 SUPABASE_SECRET_KEY。
+  找不到回 404；Storage 未設定或下載失敗回 502。
+}

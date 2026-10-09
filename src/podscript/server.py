@@ -17,13 +17,14 @@ from pathlib import Path
 from typing import Callable, Literal
 
 from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException
-from fastapi.responses import FileResponse, HTMLResponse
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.concurrency import run_in_threadpool
+from fastapi.responses import FileResponse, HTMLResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from . import audio, notify, pipeline, upload
-from .resolvers import ResolveError, article, is_media_url, platform_of, resolve
+from . import audio, notify, pipeline, projects, storage, upload
+from .resolvers import ResolveError, article, is_media_url, paper, platform_of, resolve
 from .summary import SummaryError
 
 # 模型、摘要與資料庫設定皆來自 .env，須在建立 app 前載入。
@@ -45,7 +46,7 @@ class Job:
     guid: str
     title: str
     url: str = ""
-    kind: str = "podcast"  # podcast 或 article，決定有哪些階段
+    kind: str = "podcast"  # podcast、article 或 paper，決定有哪些階段
     stage: str = "queued"
     message: str = "等待開始"
     percent: int | None = None
@@ -71,7 +72,7 @@ class Job:
             "updated_at": self.updated_at,
             "stages": [
                 "resolve",
-                *(pipeline.ARTICLE_STAGES if self.kind == "article" else pipeline.STAGES),
+                *(pipeline.STAGES if self.kind == "podcast" else pipeline.ARTICLE_STAGES),
             ],
         }
 
@@ -132,6 +133,15 @@ class SpeakersRequest(BaseModel):
     speakers: dict[str, str]
 
 
+class ProjectRequest(BaseModel):
+    name: str | None = None
+    description: str | None = None
+
+
+class EpisodeProjectsRequest(BaseModel):
+    project_ids: list[str]
+
+
 class HashtagDecisionRequest(BaseModel):
     # {新標籤: 要保留的標籤}，值為合併前的新標籤或建議的既有標籤。
     decisions: dict[str, str]
@@ -186,6 +196,43 @@ def start_process(req: ProcessRequest) -> dict:
     return job.to_dict()
 
 
+# Storage 單檔上限
+MAX_PDF_BYTES = 50 * 1024 * 1024
+
+
+@app.post("/api/papers")
+async def start_paper(request: Request, filename: str = "") -> dict:
+    """上傳論文 PDF（request body 為 PDF 原檔）並在背景產生摘要。
+
+    擷取全文在這裡同步完成（每篇不到一秒），抽不到文字（掃描檔）直接回 400。
+    PDF 原檔先存在本機，按「上傳」時才存到 Storage，見 upload.upload。
+    """
+    data = await request.body()
+    if not data:
+        raise HTTPException(status_code=400, detail="沒有收到檔案")
+    if len(data) > MAX_PDF_BYTES:
+        raise HTTPException(status_code=400, detail="PDF 超過 50 MB，無法上傳")
+
+    try:
+        parsed = await run_in_threadpool(paper.from_pdf, data, filename=filename)
+    except ResolveError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    guid = parsed.episode.episode_guid
+    with _lock:
+        running = _jobs.get(guid)
+        if running and not running.done:
+            return running.to_dict()
+        job = Job(guid=guid, title=parsed.episode.title, kind="paper")
+        job.save()
+        _jobs[guid] = job
+
+    task = _paper_task(parsed, filename)
+    thread = threading.Thread(target=_run, args=(job, task), daemon=True)
+    thread.start()
+    return job.to_dict()
+
+
 Task = Callable[[pipeline.ProgressFn], object]
 
 
@@ -202,6 +249,12 @@ def _podcast_task(url: str, force: str | None, num_speakers: int | None) -> Task
 def _article_task(parsed: article.Article, *, force: bool = False) -> Task:
     return lambda on_progress: pipeline.process_article(
         parsed, force=force, on_progress=on_progress
+    )
+
+
+def _paper_task(parsed: paper.Paper, filename: str) -> Task:
+    return lambda on_progress: pipeline.process_paper(
+        parsed, filename=filename, on_progress=on_progress
     )
 
 
@@ -284,8 +337,8 @@ def resume_job(guid: str) -> dict:
 
 
 def _resume_task(guid: str, previous: Job) -> Task | None:
-    """接續用的任務；文章已有正文就只補摘要，不必重抓網頁。"""
-    if previous.kind != "article":
+    """接續用的任務；文章與論文已有全文就只補摘要，不必重抓網頁或重新擷取。"""
+    if previous.kind == "podcast":
         return _podcast_task(previous.url, None, None) if previous.url else None
 
     directory = _episode_dir(guid)
@@ -297,6 +350,14 @@ def _resume_task(guid: str, previous: Job) -> Task | None:
             pipeline.summarize(directory, result=result)
 
         return summarize_only
+    if previous.kind == "paper":
+        pdf = directory / pipeline.PAPER_PDF
+        if not pdf.exists():
+            return None
+        try:
+            return _paper_task(paper.from_pdf(pdf.read_bytes()), "")
+        except ResolveError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
     if not previous.url:
         return None
     try:
@@ -360,6 +421,10 @@ def list_episodes() -> list[dict]:
         episodes[directory.name] = merged
 
     items = list(episodes.values())
+    # 所屬專案供左側清單依專案篩選；查詢失敗時視為都沒有歸類
+    by_episode = projects.projects_by_episode()
+    for item in items:
+        item["projects"] = by_episode.get(item["guid"], [])
     # 本機尚未上傳者的上傳時間需另外查詢。
     missing = [e["guid"] for e in items if not e.get("uploaded_at")]
     times = upload.uploaded_times(missing)
@@ -400,9 +465,7 @@ def _episode_summary(
         # 處理中尚未取得節目資訊時，依任務網址判斷平台
         "platform": episode.platform if episode else (platform_of(job.url) if job and job.url else None),
         "cover": summary_data.get("cover"),
-        "kind": "article"
-        if (episode and pipeline.is_article(episode)) or (job and job.kind == "article")
-        else "podcast",
+        "kind": _content_kind(episode, job),
         "hashtags": summary_data.get("hashtags", []),
         "has_summary": bool(summary_data.get("summary")),
         "ready": result is not None,
@@ -414,6 +477,15 @@ def _episode_summary(
         "message": job.message if job else "",
         "error": job.error if job else "",
     }
+
+
+def _content_kind(episode, job: Job | None) -> str:
+    """podcast、article 或 paper；處理中尚未取得節目資訊時看任務類型。"""
+    if episode is not None:
+        if pipeline.is_paper(episode):
+            return "paper"
+        return "article" if pipeline.is_article(episode) else "podcast"
+    return job.kind if job else "podcast"
 
 
 def _load_episode(guid: str) -> tuple[pipeline.Result, dict, bool]:
@@ -454,8 +526,9 @@ def get_episode(guid: str) -> dict:
         "from_db": from_db,
         "needs_reupload": _needs_reupload(guid),
         "known_speakers": []
-        if pipeline.is_article(result.episode)
+        if pipeline.is_text(result.episode)
         else _known_speakers(result.episode.podcast_name),
+        "projects": projects.projects_of(guid),
     }
 
 
@@ -652,6 +725,7 @@ def delete_episode(guid: str) -> dict:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     if not result["deleted_db"] and not result["freed_bytes"]:
         raise HTTPException(status_code=404, detail="查無此單集")
+    projects.remove_episode(guid)
     return result
 
 
@@ -671,6 +745,73 @@ def get_audio(guid: str) -> FileResponse:
     if not path.exists():
         raise HTTPException(status_code=404, detail="找不到音檔")
     return FileResponse(path, media_type="audio/mpeg")
+
+
+# ── 研究專案 ────────────────────────────────────────
+# 專案只存在資料庫，兩台電腦共用；未上傳的單集也能歸類。
+
+
+@app.get("/api/projects")
+def list_projects() -> list[dict]:
+    """所有專案與各自的內容數，依名稱排序。"""
+    try:
+        return projects.list_projects()
+    except projects.ProjectError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+
+@app.post("/api/projects")
+def create_project(req: ProjectRequest) -> dict:
+    try:
+        return projects.create_project(req.name or "", req.description or "")
+    except projects.ProjectError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.put("/api/projects/{project_id}")
+def update_project(project_id: str, req: ProjectRequest) -> dict:
+    """修改專案名稱或說明；未帶的欄位不變。"""
+    try:
+        projects.update_project(project_id, name=req.name, description=req.description)
+    except projects.ProjectError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return {"id": project_id}
+
+
+@app.delete("/api/projects/{project_id}")
+def delete_project(project_id: str) -> dict:
+    """刪除專案；歸類關係連帶刪除，單集本身不受影響。"""
+    try:
+        projects.delete_project(project_id)
+    except projects.ProjectError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return {"deleted": project_id}
+
+
+@app.put("/api/episodes/{guid}/projects")
+def set_episode_projects(guid: str, req: EpisodeProjectsRequest) -> dict:
+    """設定這集所屬的專案（整組取代）。直接寫入資料庫，不需再次上傳。"""
+    _load_episode(guid)  # 查無此單集時回 404，避免歸類到打錯的 guid
+    try:
+        return {"projects": projects.set_episode_projects(guid, req.project_ids)}
+    except projects.ProjectError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.get("/api/episodes/{guid}/pdf")
+def get_paper_pdf(guid: str) -> Response:
+    """論文的 PDF 原檔：本機尚未上傳的讀本機檔案，已上傳的從 Storage 取得。"""
+    path = _episode_dir(guid) / pipeline.PAPER_PDF
+    if path.exists():
+        return FileResponse(path, media_type="application/pdf")
+    if not guid.startswith("paper-"):
+        raise HTTPException(status_code=404, detail="找不到 PDF 原檔")
+    try:
+        data = storage.fetch_paper(guid)
+    except storage.StorageError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    # inline：瀏覽器分頁直接開啟，不另存檔案
+    return Response(data, media_type="application/pdf", headers={"Content-Disposition": "inline"})
 
 
 def _episode_dir(guid: str) -> Path:

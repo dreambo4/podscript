@@ -985,6 +985,21 @@ a.seg-time { color: var(--accent); text-decoration: underline; text-underline-of
 .article-text mark { background: var(--accent-soft); color: inherit; border-radius: 3px; padding: 0 1px; }
 .article-text mark.current { background: var(--accent); color: var(--accent-ink); }
 
+/* 論文原文：未列入章節的章標題、節標題、表格（每列一行，可橫向捲動）與參考文獻 */
+.article-text .paper-heading { margin: 20px 0 10px; font-size: 16px; }
+.article-text .paper-subheading { margin: 16px 0 8px; font-size: 15px; }
+.article-text .paper-table {
+  margin: 0 0 14px;
+  padding: 10px 12px;
+  overflow-x: auto;
+  background: var(--accent-soft);
+  border-radius: 6px;
+  font: 12px/1.6 ui-monospace, "SF Mono", Menlo, monospace;
+  white-space: pre;
+}
+.article-text .paper-table-caption { margin: 0 0 6px; font-size: 13px; font-weight: 600; }
+.article-text .paper-ref { margin: 0 0 6px; font-size: 13px; color: var(--muted); line-height: 1.6; }
+
 /* 章節目錄與逐字稿內的章節標題 */
 .chapters { margin-bottom: 16px; }
 .chapters-toc {
@@ -1128,3 +1143,79 @@ a.seg-time { color: var(--accent); text-decoration: underline; text-underline-of
 .user-menu button:active,
 .user-menu button:hover { background: var(--accent-soft); }
 .user-menu button .icon { color: var(--muted); }
+
+/* ── 研究專案 ── */
+.project-list { display: grid; gap: 10px; padding-bottom: 24px; }
+.new-project { display: flex; gap: 8px; margin-bottom: 14px; }
+.new-project input {
+  flex: 1;
+  min-width: 0;
+  padding: 10px 14px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: var(--card);
+  color: var(--ink);
+  font: inherit;
+  font-size: 16px; /* 小於 16px 時 iOS 聚焦會自動放大頁面 */
+}
+.new-project button {
+  padding: 0 16px;
+  border-radius: 12px;
+  border: none;
+  background: var(--accent);
+  color: var(--accent-ink);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+}
+.project-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 4px;
+  padding: 12px 8px 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--card);
+  color: inherit;
+  text-decoration: none;
+  box-shadow: var(--shadow-soft);
+}
+.project-card-link { flex: 1; min-width: 0; display: grid; gap: 4px; color: inherit; text-decoration: none; }
+.project-card-edit { flex: none; color: var(--muted); }
+.project-card-head { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.project-card-head .icon { color: var(--accent); flex: none; }
+.project-card-name { flex: 1; min-width: 0; font-weight: 600; overflow-wrap: anywhere; }
+.project-card-count { flex: none; color: var(--muted); font-size: 13px; }
+.project-card-desc { color: var(--muted); font-size: 13px; line-height: 1.6; }
+
+/* 單集頁的研究專案：點選切換是否歸入 */
+.ep-projects-block { margin-top: 14px; }
+.project-toggles { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+.project-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 5px 11px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: var(--card);
+  color: var(--muted);
+  font: inherit;
+  font-size: 12.5px;
+}
+.project-toggle.on { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); font-weight: 700; }
+.project-toggle.project-add { border-style: dashed; }
+
+/* 專案編輯 sheet 的輸入框 */
+.sheet-input {
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: var(--card);
+  color: var(--ink);
+  font: inherit;
+  font-size: 16px;
+  resize: vertical;
+}
+.sheet-actions button.danger { color: var(--heart); flex: 0 0 auto; display: inline-flex; align-items: center; gap: 4px; }

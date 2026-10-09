@@ -1,0 +1,31 @@
+meta {
+  name: 新增專案
+  type: http
+  seq: 2
+}
+
+post {
+  url: {{mobileBase}}/api/projects
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+body:json {
+  {
+    "name": "減脂研究",
+    "description": ""
+  }
+}
+
+docs {
+  建立研究專案，回傳 {"id", "name", "description", "count": 0}。
+  名稱空白或與既有專案重複回 400；名稱超過 100 字、說明超過 2000 字回 422。
+}
+
+script:post-response {
+  if (res.status === 200 && res.body.id) bru.setEnvVar("projectId", res.body.id);
+}

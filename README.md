@@ -1,7 +1,7 @@
 # podscript
 
 Podcast 逐字稿工具：貼上 Apple Podcast 單集或 YouTube 影片網址，產生**區分說話者、帶時間戳的逐字稿**、
-內容摘要與心智圖。新聞或文章網址（或直接貼上全文）則跳過轉錄，只產生摘要、心智圖與標籤。本機網頁檢視與下載，結果可手動上傳 Supabase，供手機搜尋瀏覽。
+內容摘要與心智圖。新聞或文章網址（或直接貼上全文）則跳過轉錄，只產生摘要、心智圖與標籤；論文 PDF 也可以上傳。本機網頁檢視與下載，結果可手動上傳 Supabase，供手機搜尋瀏覽。
 
 ## 架構
 
@@ -117,6 +117,12 @@ whisper 模型轉錄時整份載入記憶體，且 Metal 緩衝區無法換出�
 判斷錯時可手動切換。付費文章、需要登入或抓不到正文時，按「貼上全文」直接貼內容。
 文章不轉錄、沒有說話者，約 1 到 2 分鐘完成；原文會一併上傳，手機可搜尋內文。
 
+論文按「上傳論文」選 PDF 檔。全文擷取在本機進行（掃描版 PDF 抽不到文字，不支援），
+章節直接用論文原有的章標題，表格逐列保留，參考文獻保留在原文但不送摘要模型。
+摘要依序說明研究問題、方法、主要發現與限制，並讀出期刊名稱作為來源。
+按「上傳」時 PDF 原檔存到 Supabase Storage 的 `papers` bucket（需 `.env` 的 `SUPABASE_URL`、
+`SUPABASE_SECRET_KEY`），兩台電腦都能從結果頁的「開啟 PDF 原檔」取得；手機只看全文與摘要。
+
 - 一集約 1 小時的節目，處理時間約數十分鐘；網頁會顯示各階段進度，重新整理後可接回。
 - 各階段的產出存於 `audio/<guid>/`，以「檔案是否存在」判斷是否已完成，
   中斷後重跑會從未完成的階段接續。
@@ -144,13 +150,14 @@ whisper 模型轉錄時整份載入記憶體，且 Metal 緩衝區無法換出�
 
 ```
 src/podscript/      本機服務（FastAPI）與處理流程
-  resolvers/        平台網址解析（Apple Podcast、YouTube、文章正文擷取）
+  resolvers/        平台網址解析（Apple Podcast、YouTube、文章正文擷取、論文 PDF 擷取）
   pipeline.py       串接各階段
   transcribe.py     whisper.cpp 轉錄
   diarize.py        pyannote 說話者分離與對齊
   hardware.py       硬體偵測與模型推薦
   summary.py        claude -p 產生摘要、心智圖、標籤
   upload.py         上傳 Supabase、待處理清單
+  storage.py        Supabase Storage（論文 PDF 原檔、思辨練習紀錄）
 web/                本機網頁
 mobile-web/         手機前端
 mobile-backend/     手機後端

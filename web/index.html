@@ -32,6 +32,8 @@
     <input id="url" type="url" placeholder="貼上 Podcast、YouTube 或文章網址…" required>
     <button type="submit">開始</button>
     <button id="btn-paste" type="button" class="secondary" title="付費文章或抓不到正文時，直接貼上全文">貼上全文</button>
+    <button id="btn-pdf" type="button" class="secondary" title="上傳論文 PDF，產生摘要與心智圖">上傳論文</button>
+    <input id="pdf-file" type="file" accept="application/pdf,.pdf" hidden>
   </form>
 </header>
 
@@ -46,6 +48,11 @@
       <symbol id="ic-video" viewBox="0 0 24 24">
         <rect x="3.5" y="5.5" width="17" height="13" rx="3" fill="none" stroke="currentColor" stroke-width="1.6"/>
         <path d="M10.3 9.4v5.2l4.4-2.6z" fill="currentColor" stroke="currentColor" stroke-width="1" stroke-linejoin="round"/>
+      </symbol>
+      <symbol id="ic-paper" viewBox="0 0 24 24">
+        <path d="M14 3.5H7a1.5 1.5 0 0 0-1.5 1.5v14A1.5 1.5 0 0 0 7 20.5h10a1.5 1.5 0 0 0 1.5-1.5V8z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>
+        <path d="M14 3.5V8h4.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>
+        <path d="M8.5 12h7M8.5 15h7M8.5 18h4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
       </symbol>
       <symbol id="ic-article" viewBox="0 0 24 24">
         <path d="M16.5 19H5a1.5 1.5 0 0 1-1.5-1.5V5.5a1 1 0 0 1 1-1h11a1 1 0 0 1 1 1V17.5a1.5 1.5 0 0 0 3 0V9h-3" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>
@@ -63,6 +70,12 @@
     <div class="sidebar-head">
       <h2>單集</h2>
       <input id="filter" type="search" placeholder="搜尋標題或標籤…">
+      <div class="project-filter">
+        <select id="project-filter" aria-label="依研究專案篩選">
+          <option value="">全部專案</option>
+        </select>
+        <button id="btn-manage-projects" type="button" class="secondary">管理專案</button>
+      </div>
     </div>
     <ul id="episode-list" class="episode-list"></ul>
   </aside>
@@ -70,7 +83,7 @@
   <main id="content">
 
     <section id="empty" class="card placeholder">
-      <p>貼上 Apple Podcast 單集、YouTube 影片或文章網址開始，<br>或從左側選擇已處理的單集。</p>
+      <p>貼上 Apple Podcast 單集、YouTube 影片或文章網址開始，也可以上傳論文 PDF，<br>或從左側選擇已處理的單集。</p>
     </section>
 
     <section id="progress" class="card" hidden>
@@ -110,6 +123,17 @@
         <p id="summary-text"></p>
         <p id="hashtags" class="tags"></p>
         <div id="tag-review" class="tag-review" hidden></div>
+      </div>
+
+      <div class="block">
+        <div class="block-head">
+          <h3>研究專案</h3>
+        </div>
+        <div id="episode-projects" class="project-chips"></div>
+        <form id="new-project-form" class="new-project">
+          <input id="new-project-name" type="text" placeholder="新增專案並加入這一集…" maxlength="100">
+          <button type="submit" class="secondary">新增</button>
+        </form>
       </div>
 
       <div class="block">
@@ -160,6 +184,17 @@
     <menu>
       <button value="cancel">取消</button>
       <button id="btn-do-download" value="ok" type="button">下載</button>
+    </menu>
+  </form>
+</dialog>
+
+<dialog id="projects-dialog" class="projects-dialog">
+  <form method="dialog">
+    <h3>研究專案</h3>
+    <p class="muted">專案存在資料庫，兩台電腦共用。刪除專案只會移除歸類，不會刪除單集。</p>
+    <ul id="project-manage-list" class="project-manage-list"></ul>
+    <menu>
+      <button value="close">關閉</button>
     </menu>
   </form>
 </dialog>

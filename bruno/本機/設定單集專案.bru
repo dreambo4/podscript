@@ -1,0 +1,24 @@
+meta {
+  name: 設定單集專案
+  type: http
+  seq: 25
+}
+
+put {
+  url: {{localBase}}/api/episodes/{{guid}}/projects
+  body: json
+  auth: none
+}
+
+body:json {
+  {
+    "project_ids": ["{{projectId}}"]
+  }
+}
+
+docs {
+  把這集的所屬專案整組設為 project_ids（不在其中的移除），回傳 {"projects": [...]}。
+  直接寫入資料庫，尚未上傳的單集也能歸類，不需再次上傳。
+  查無此單集回 404；專案已被刪除或代碼格式錯誤回 400。
+  刪除單集（刪除單集.bru）時會一併移除它的歸類。
+}

@@ -39,15 +39,21 @@ class DiarizedSegment:
     speaker: str
     text: str
     confidence: float
+    # 論文段落的類型（章節標題、表格、參考文獻），見 resolvers.paper；其餘內容為空字串
+    kind: str = ""
 
     def to_dict(self) -> dict:
-        return {
+        data = {
             "start": round(self.start, 2),
             "end": round(self.end, 2),
             "speaker": self.speaker,
             "text": self.text,
             "confidence": round(self.confidence, 3),
         }
+        # 只有論文才寫入，既有逐字稿與文章的資料格式不變
+        if self.kind:
+            data["kind"] = self.kind
+        return data
 
 
 class DiarizeError(Exception):

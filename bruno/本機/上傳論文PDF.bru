@@ -1,0 +1,33 @@
+meta {
+  name: 上傳論文PDF
+  type: http
+  seq: 19
+}
+
+post {
+  url: {{localBase}}/api/papers?filename=paper.pdf
+  body: file
+  auth: none
+}
+
+params:query {
+  filename: paper.pdf
+}
+
+body:file {
+  file: @file(paper.pdf) @contentType(application/pdf)
+}
+
+docs {
+  上傳論文 PDF 並在背景產生摘要、心智圖、標籤與封面，回傳 job（kind 為 paper，stages 為 resolve、summarize）。
+  request body 為 PDF 原檔本身（Content-Type: application/pdf），不是 multipart；選檔時改成本機的 PDF 路徑。
+  filename：原始檔名，上傳 Storage 時記在物件的 metadata。
+  全文擷取在這裡同步完成（每篇不到一秒），guid 為 PDF 內容雜湊（paper-<16 碼>），同一份 PDF 重複上傳得到同一個 guid。
+  不是 PDF、超過 50 MB、或抽不到文字（掃描檔）回 400。
+  PDF 原檔先存在本機單集目錄（source.pdf），按「上傳至Supabase」時才存到 Storage 的 papers bucket。
+  章節取自論文原有的章標題，不呼叫模型；摘要時順便讀出期刊名稱（存為 podcast_name）、原文標題與發表日期。
+}
+
+script:post-response {
+  if (res.status === 200 && res.body.guid) bru.setEnvVar("guid", res.body.guid);
+}

@@ -1,0 +1,21 @@
+meta {
+  name: 專案列表
+  type: http
+  seq: 21
+}
+
+get {
+  url: {{localBase}}/api/projects
+  body: none
+  auth: none
+}
+
+docs {
+  所有研究專案，依名稱排序：[{"id", "name", "description", "created_at", "item_count"}]。
+  item_count 含尚未上傳的單集。專案存在資料庫（projects、project_items），兩台電腦共用。
+  資料庫連不上或尚未建表回 502。
+}
+
+script:post-response {
+  if (res.status === 200 && res.body.length) bru.setEnvVar("projectId", res.body[0].id);
+}

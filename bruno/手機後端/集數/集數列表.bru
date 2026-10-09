@@ -23,14 +23,16 @@ params:query {
   ~channel: 
   ~kind: video
   ~favorites_only: true
+  ~project: {{projectId}}
 }
 
 docs {
-  每筆附 platform（apple／youtube／article），前端據此標示文章。
+  每筆附 platform（apple／youtube／article／paper），前端據此標示文章與論文。
   每筆附 cover：{"svg": "...", "color": "#rrggbb"}，svg 為 viewBox 0 0 48 48 的內部元素（本機已過濾，前端顯示前再過濾一次）；尚未產生時為 null。
   sort：created_at／published_at
-  kind：audio（音檔，YouTube 與文章以外的平台）／video（影片，YouTube）／article（文章）；不帶則不篩選
+  kind：audio（音檔，YouTube、文章、論文以外的平台）／video（影片，YouTube）／article（文章）／paper（論文）；不帶則不篩選
   tag_mode：all（須同時包含全部標籤）／any（符合任一）
+  project：研究專案 id（projects.id，UUID），只列出歸入該專案的集數；格式錯誤回 422
   tags 可重複多次，例如 tags=AI&tags=投資
   有 q 時每集多回傳：
     snippet：逐字稿第一個命中處前後各約 40 字，被截斷的一側加「…」；只命中標題時為 null

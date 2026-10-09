@@ -18,11 +18,17 @@ from . import audio, chapters, diarize, postprocess, summary, transcribe
 from . import resolvers
 from .resolvers import Episode, resolve
 from .resolvers.article import PLATFORM as ARTICLE_PLATFORM, Article
+from .resolvers.paper import HEADING, PLATFORM as PAPER_PLATFORM, REFERENCE, SUBHEADING, TABLE, Paper
 
 STAGES = ("download", "transcribe", "diarize", "merge", "summarize")
 
-# 文章沒有音檔，只有摘要一個階段。
+# 文章與論文沒有音檔，只有摘要一個階段。
 ARTICLE_STAGES = ("summarize",)
+
+# 論文 PDF 原檔在單集目錄中的檔名；上傳時存到 Storage，見 upload.upload。
+PAPER_PDF = "source.pdf"
+# 原始檔名等資訊，上傳 Storage 時寫入物件的 metadata。
+PAPER_PDF_INFO = "source.pdf.json"
 
 # (階段, 訊息, 百分比)。百分比僅轉錄階段有值，其餘為 None。
 ProgressFn = Callable[[str, str, "int | None"], None]
@@ -193,8 +199,70 @@ def process_article(
     return result
 
 
+def process_paper(
+    paper: Paper,
+    *,
+    filename: str = "",
+    force: bool = False,
+    summary_model: str | None = None,
+    on_progress: ProgressFn | None = None,
+) -> Result:
+    """處理論文：存下 PDF 原檔與擷取的全文，直接產生摘要。
+
+    每個段落、標題、表格、參考文獻各存成一個片段（kind 標示類型），
+    與文章共用同一份資料格式；章節由論文原有的章標題產生，不呼叫模型分章。
+
+    Args:
+        filename: PDF 的原始檔名，上傳 Storage 時記在 metadata。
+        force: 已有摘要時是否重新生成。
+    """
+    notify = on_progress or (lambda stage, message, percent=None: None)
+    episode = paper.episode
+    directory = audio.episode_dir(episode.episode_guid)
+
+    if paper.pdf:
+        (directory / PAPER_PDF).write_bytes(paper.pdf)
+        (directory / PAPER_PDF_INFO).write_text(
+            json.dumps({"filename": filename}, ensure_ascii=False), encoding="utf-8"
+        )
+
+    previous = load_result(directory)
+    result = Result(
+        episode=episode,
+        segments=[
+            diarize.DiarizedSegment(
+                start=0.0, end=0.0, speaker="", text=block.text, confidence=1.0, kind=block.kind
+            )
+            for block in paper.blocks
+        ],
+        speakers={},
+        provenance=Provenance(),
+    )
+    # 重新擷取時保留先前由摘要讀出的書目資料
+    if previous is not None:
+        result.episode.title = previous.episode.title
+        result.episode.podcast_name = previous.episode.podcast_name
+        result.episode.published_at = previous.episode.published_at
+    _write_outputs(directory, result)
+
+    notify("summarize", "產生摘要、心智圖與標籤", None)
+    summarize(
+        directory, result=result, force=force, summary_model=summary_model
+    )
+    return result
+
+
 def is_article(episode: Episode) -> bool:
     return episode.platform == ARTICLE_PLATFORM
+
+
+def is_paper(episode: Episode) -> bool:
+    return episode.platform == PAPER_PLATFORM
+
+
+def is_text(episode: Episode) -> bool:
+    """文章與論文：沒有音檔與說話者，以段落定位。"""
+    return is_article(episode) or is_paper(episode)
 
 
 def summarize(
@@ -234,9 +302,12 @@ def summarize(
         except summary.SummaryError:
             return None
 
-    generated.chapters = _normalize_chapters(
-        generated.chapters, result or load_result(directory)
-    )
+    loaded = result or load_result(directory)
+    generated.chapters = _normalize_chapters(generated.chapters, loaded)
+    if loaded is not None and is_paper(loaded.episode):
+        if result is None:
+            result = loaded
+        _apply_paper_meta(result.episode, generated.meta)
 
     # 延遲匯入避免與 upload 模組的循環參照（upload 匯入 pipeline 取得 Result）。
     from . import upload as _upload
@@ -266,6 +337,7 @@ def add_chapters(
     """只產生章節，不動摘要、心智圖與標籤。供已有摘要的舊集數補上章節。
 
     本機有 result.json 時一併寫入；已上傳者由呼叫端寫回資料庫。
+    論文的章節取自原有的章標題，不呼叫模型。
 
     Returns:
         檢查與對齊後的章節，見 chapters.normalize。
@@ -273,6 +345,13 @@ def add_chapters(
     Raises:
         summary.SummaryError: 生成失敗，或模型回傳的章節全部不合格。
     """
+    if is_paper(result.episode):
+        normalized = paper_chapters(result.segments)
+        if not normalized:
+            raise summary.SummaryError("這篇論文沒有辨識出章標題")
+        _save_chapters(directory, normalized)
+        return normalized
+
     with _summary_transcript(directory, result) as transcript:
         model = summary_model or os.environ.get("CLAUDE_CLI_MODEL", "opus")
         provider = summary.get_provider(
@@ -285,14 +364,61 @@ def add_chapters(
     normalized = _normalize_chapters(raw, result)
     if not normalized:
         raise summary.SummaryError("模型回傳的章節格式不正確，請再試一次")
+    _save_chapters(directory, normalized)
+    return normalized
 
+
+def _save_chapters(directory: Path, chapters_: list[dict]) -> None:
     data = load_summary(directory)
     if data is not None:
-        data["chapters"] = normalized
+        data["chapters"] = chapters_
         (directory / "result.json").write_text(
             json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8"
         )
-    return normalized
+
+
+def paper_chapters(segments: list[diarize.DiarizedSegment]) -> list[dict]:
+    """論文的章節：每個章標題一章，以段落索引定位，格式與文章章節相同。
+
+    章標題不到兩個時（只辨識出節標題的論文）改用節標題。
+    """
+    for kinds in ((HEADING,), (HEADING, SUBHEADING)):
+        found = [
+            {"paragraph": i, "title": seg.text}
+            for i, seg in enumerate(segments)
+            if seg.kind in kinds
+        ]
+        if len(found) >= chapters.MIN_CHAPTERS:
+            return found
+    return []
+
+
+def _apply_paper_meta(episode: Episode, meta: dict | None) -> None:
+    """以模型讀出的書目資料更新論文的標題、來源與發表日期。
+
+    來源（podcast_name 欄位）填期刊名稱，讀不到時用「第一作者 et al.」。
+    """
+    if not meta:
+        return
+    if meta.get("title"):
+        episode.title = meta["title"]
+    if meta.get("journal"):
+        episode.podcast_name = meta["journal"]
+    elif meta.get("first_author"):
+        episode.podcast_name = f"{meta['first_author']} et al."
+    published = _parse_published(meta.get("published", ""))
+    if published is not None:
+        episode.published_at = published
+
+
+def _parse_published(value: str) -> datetime | None:
+    """YYYY-MM-DD 或 YYYY-MM；只有年份時不填，避免列表顯示成一月一日。"""
+    for fmt in ("%Y-%m-%d", "%Y-%m"):
+        try:
+            return datetime.strptime(value, fmt).replace(tzinfo=timezone.utc)
+        except ValueError:
+            continue
+    return None
 
 
 def regenerate_cover(
@@ -328,9 +454,11 @@ def regenerate_cover(
 
 
 def _normalize_chapters(raw: list, result: Result | None) -> list[dict]:
-    """檢查章節並對齊到段落：Podcast 依時間，文章依段落編號。"""
+    """檢查章節並對齊到段落：Podcast 依時間，文章依段落編號，論文取原有的章標題。"""
     if result is None:
         return []
+    if is_paper(result.episode):
+        return paper_chapters(result.segments)
     if is_article(result.episode):
         return chapters.normalize_paragraphs(raw, len(result.segments))
     return chapters.normalize(
@@ -347,10 +475,10 @@ def _summary_transcript(directory: Path, result: Result | None):
     逐字稿不可當命令列參數傳遞（長度會超過 ARG_MAX），必須寫成檔案。
     目錄中沒有 transcript.txt 時（單集已上傳並清除），由 result 重建一份
     暫存檔，用畢刪除，不在已清空的目錄留下殘留。
-    文章一律由 result 重建，確保段落編號（見 format_text）為最新格式。
+    文章與論文一律由 result 重建，確保段落編號與格式（見 format_text）為最新。
     """
     existing = directory / "transcript.txt"
-    rebuild_article = result is not None and is_article(result.episode)
+    rebuild_article = result is not None and is_text(result.episode)
     if result is None or (existing.exists() and not rebuild_article):
         yield existing
         return
@@ -459,7 +587,22 @@ def format_text(result: Result) -> str:
     """輸出供 claude CLI 讀取的全文：文章為標題加段落，其餘為逐字稿。
 
     文章每段開頭加 [n] 編號（1 起算），供模型回傳章節從第幾段開始。
+    論文的章節不由模型產生，不加編號；參考文獻不送模型（節省額度，也不影響摘要）。
     """
+    if is_paper(result.episode):
+        parts = [result.episode.title]
+        for seg in result.segments:
+            if seg.kind == REFERENCE:
+                continue
+            if seg.kind == HEADING:
+                parts.append(f"## {seg.text}")
+            elif seg.kind == SUBHEADING:
+                parts.append(f"### {seg.text}")
+            elif seg.kind == TABLE:
+                parts.append(f"[表格]\n{seg.text}")
+            else:
+                parts.append(seg.text)
+        return "\n\n".join(parts)
     if is_article(result.episode):
         paragraphs = [f"[{i}] {s.text}" for i, s in enumerate(result.segments, 1)]
         # 貼上全文未填標題時，標題就是第一段開頭，不重複列出
@@ -473,6 +616,8 @@ def format_text(result: Result) -> str:
 def _content_kind(directory: Path, result: Result | None) -> str:
     """摘要提示的內容類型；未傳入 result 時讀目錄中的處理結果判斷。"""
     loaded = result or load_result(directory)
+    if loaded and is_paper(loaded.episode):
+        return "paper"
     return "article" if loaded and is_article(loaded.episode) else "podcast"
 
 

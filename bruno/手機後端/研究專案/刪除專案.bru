@@ -1,0 +1,19 @@
+meta {
+  name: 刪除專案
+  type: http
+  seq: 4
+}
+
+delete {
+  url: {{mobileBase}}/api/projects/{{projectId}}
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+docs {
+  刪除研究專案，歸類關係連帶刪除，單集不受影響。成功回 204；查無此專案回 404。
+}

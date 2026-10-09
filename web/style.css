@@ -126,6 +126,60 @@ body {
 
 .sidebar-head h2 { margin: 0 0 10px; font-size: 14px; color: var(--muted); }
 
+/* 依研究專案篩選與管理 */
+.project-filter { display: flex; gap: 6px; margin: 6px 0 4px; }
+.project-filter select {
+  flex: 1;
+  min-width: 0;
+  padding: 6px 8px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  font: inherit;
+  font-size: 13px;
+  background: var(--card);
+}
+.project-filter button { font-size: 13px; padding: 4px 10px; white-space: nowrap; }
+
+/* 單集頁的研究專案：點選切換是否歸入 */
+.project-chips { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
+.project-chips button {
+  padding: 4px 12px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--card);
+  color: var(--muted);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+.project-chips button.on { border-color: var(--accent); background: var(--accent); color: #fff; }
+.project-chips .muted { margin: 0; }
+.new-project { display: flex; gap: 6px; max-width: 420px; }
+.new-project input {
+  flex: 1;
+  min-width: 0;
+  padding: 6px 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  font: inherit;
+  font-size: 13px;
+}
+
+.projects-dialog { width: min(560px, 92vw); }
+.project-manage-list { list-style: none; margin: 12px 0; padding: 0; display: grid; gap: 12px; }
+.project-manage-list li { display: grid; grid-template-columns: 1fr auto; gap: 6px; align-items: start; }
+.project-manage-list input,
+.project-manage-list textarea {
+  width: 100%;
+  padding: 6px 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  font: inherit;
+  font-size: 13px;
+}
+.project-manage-list textarea { grid-column: 1; resize: vertical; min-height: 2.4em; }
+.project-manage-list .count { color: var(--muted); font-size: 12px; grid-column: 1; }
+
 #filter {
   width: 100%;
   padding: 7px 10px;
@@ -695,6 +749,21 @@ dialog button.primary { background: var(--accent); border-color: var(--accent); 
 
 /* 文章原文：只有段落，沒有時間與說話者 */
 .article-text p { margin: 0 0 14px; line-height: 1.8; }
+
+/* 論文原文：未列入章節的章標題、節標題、表格（每列一行，可橫向捲動）與參考文獻 */
+.article-text .paper-heading { margin: 20px 0 10px; font-size: 16px; }
+.article-text .paper-subheading { margin: 16px 0 8px; font-size: 15px; color: var(--ink); }
+.article-text .paper-table {
+  margin: 0 0 14px;
+  padding: 10px 12px;
+  overflow-x: auto;
+  background: var(--sidebar-bg);
+  border-radius: 6px;
+  font: 12.5px/1.6 ui-monospace, "SF Mono", Menlo, monospace;
+  white-space: pre;
+}
+.article-text .paper-table-caption { margin: 0 0 6px; font-size: 13px; font-weight: 600; }
+.article-text .paper-ref { margin: 0 0 6px; font-size: 13px; color: var(--muted); line-height: 1.6; }
 
 .error { color: #a33; }
 
