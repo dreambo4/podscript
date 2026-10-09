@@ -38,12 +38,18 @@ function listCoverHtml(e) {
   return `<div class="ep-cover" style="--cover-color:${escapeHtml(e.cover.color)}"><svg ${COVER_SVG_DEFAULTS} aria-hidden="true">${e.cover.svg}</svg></div>`;
 }
 
+/** 長度：音檔與影片為分鐘；論文的 duration_sec 存的是頁數。 */
+function lengthLabel(isPaperItem, value) {
+  if (!value) return "";
+  return isPaperItem ? `${value} 頁` : `${Math.round(value / 60)} 分鐘`;
+}
+
 function episodeRow(e, selected) {
   const { icon, label } = EP_KINDS[episodeKind(e)];
   const meta = [
     escapeHtml(e.podcast_name),
     (e.published_at || "").slice(0, 10),
-    e.duration_sec ? `${Math.round(e.duration_sec / 60)} 分鐘` : "",
+    lengthLabel(e.kind === "paper", e.duration_sec),
   ]
     .filter(Boolean)
     // 每段不斷行，窄欄換行時只在「·」之間換，不會把「61 分鐘」拆開
@@ -58,7 +64,7 @@ function episodeRow(e, selected) {
         STAGE_LABELS[e.stage] || e.stage
       )}中${e.percent != null ? ` ${e.percent}%` : "…"}</span>`
     : e.cancelled
-      ? `<span class="ep-status muted">已取消排隊，點擊可重新排入</span>`
+      ? `<span class="ep-status muted">${escapeHtml(e.error || "已終止")}，點擊可重新排入</span>`
     : e.error
       ? `<span class="ep-status ep-error">未完成，點擊繼續</span>`
       : !e.has_summary
@@ -78,18 +84,71 @@ function episodeRow(e, selected) {
   </li>`;
 }
 
+// ── 主題（深/淺色）──────────────────────────────────
+// 三態：跟隨系統（不存值）／light／dark，與手機端相同的 data-theme 機制。
+// 初始值由各頁 <head> 的內嵌腳本先套上，避免載入時閃一下淺色；這裡只負責切換。
+// 心智圖 root 色、筆記編輯器配色是渲染時算定的，各頁監聽 podscript:theme 事件重繪。
+const THEME_KEY = "podscript_theme";
+
+function getStoredTheme() {
+  try {
+    return localStorage.getItem(THEME_KEY); // null＝跟隨系統
+  } catch {
+    return null;
+  }
+}
+
+function isDarkMode() {
+  const stored = getStoredTheme();
+  return stored ? stored === "dark" : window.matchMedia("(prefers-color-scheme: dark)").matches;
+}
+
+function syncThemeButton() {
+  const btn = $("btn-theme");
+  if (!btn) return;
+  const dark = isDarkMode();
+  btn.querySelector("use").setAttribute("href", dark ? "#ic-sun" : "#ic-moon");
+  btn.title = btn.ariaLabel = dark ? "切換為淺色" : "切換為深色";
+}
+
+function toggleTheme() {
+  const next = isDarkMode() ? "light" : "dark";
+  try {
+    localStorage.setItem(THEME_KEY, next);
+  } catch {}
+  document.documentElement.dataset.theme = next;
+  syncThemeButton();
+  window.dispatchEvent(new Event("podscript:theme"));
+}
+
+/** markmap 的 root 節點色：深色底需要較亮的顏色（與手機端相同）。 */
+function mindmapRootColor() {
+  return isDarkMode() ? "#cbd5e1" : "#475569";
+}
+
+syncThemeButton();
+$("btn-theme")?.addEventListener("click", toggleTheme);
+// 跟隨系統時，系統切換深淺色也要更新圖示與重繪
+window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => {
+  if (getStoredTheme()) return;
+  syncThemeButton();
+  window.dispatchEvent(new Event("podscript:theme"));
+});
+
 // ── 心智圖全螢幕 ──────────────────────────────────
 let fullMindmap = null;
+let fullMindmapCode = null;
 
 /** 以全螢幕顯示心智圖（mermaid mindmap 語法），可拖曳縮放。 */
 function openMindmapFull(code) {
   if (!code || typeof window.renderMarkmap !== "function") return;
+  fullMindmapCode = code;
   $("mindmap-overlay").hidden = false;
   document.body.classList.add("scroll-locked");
   fullMindmap?.destroy();
   // 必須在 overlay 顯示後才渲染，markmap 依容器實際尺寸 fit。
   try {
-    fullMindmap = window.renderMarkmap(code, $("mindmap-full"));
+    fullMindmap = window.renderMarkmap(code, $("mindmap-full"), { rootColor: mindmapRootColor() });
   } catch (err) {
     closeMindmapFull();
   }
@@ -112,6 +171,10 @@ if ($("mindmap-overlay")) {
     if (e.key === "Escape") closeMindmapFull();
   });
   window.addEventListener("resize", () => fullMindmap?.fit());
+  // 全螢幕開著時系統切換深淺色，重繪才會換 root 色
+  window.addEventListener("podscript:theme", () => {
+    if (!$("mindmap-overlay").hidden) openMindmapFull(fullMindmapCode);
+  });
 }
 
 // ── 工具 ────────────────────────────────────────────

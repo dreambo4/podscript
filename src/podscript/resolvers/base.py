@@ -26,7 +26,7 @@ class Episode:
         mp3_url: 音檔直連網址。可能帶時效性參數，不保證長期有效。
             沒有固定直連的平台（如 YouTube）為空字串，由 resolver 的
             download 自行取得。
-        duration_sec: 音檔長度（秒）。RSS 未提供時為 None。
+        duration_sec: 音檔長度（秒）。RSS 未提供時為 None。論文存 PDF 頁數（介面顯示「N 頁」）。
         published_at: 發布時間。RSS 未提供時為 None。
         description: 節目簡介原文，含 HTML 標記與贊助商段落。
         title_translated: 標題的中文譯文（論文翻譯後才有），列表顯示在原標題下方。

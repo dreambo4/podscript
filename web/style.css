@@ -1,12 +1,23 @@
+/* 淺色為預設；深色兩段（跟隨系統、手動指定）內容相同，與手機端同一套 data-theme 機制。
+   深色只套用在螢幕，列印一律用淺色。 */
 :root {
+  color-scheme: light;
   --bg: #faf9f7;
   --card: #fff;
   --ink: #1c1b1a;
   --muted: #6b6864;
   --line: #e4e1dc;
+  --line-strong: #cfcac2;
   --accent: #2f6f4f;
+  --accent-ink: #fff;
   --accent-soft: #eef3ef;
+  --accent-stripe: #6ea98a;
+  --neutral-soft: #f0eeeb;
   --warn: #9a7b2e;
+  --danger: #a33;
+  --toast-bg: #1c1b1a;
+  --toast-ink: #fff;
+  --toast-link: #9fd3b4;
   --topbar-h: 61px;
   --sidebar-w: 340px;
   --sidebar-bg: #f2f0ec;
@@ -18,7 +29,63 @@
   --mm-3: #94b3ab; --mm-4: #a3a3c9; --mm-5: #c2a08e; --mm-6: #8fb0a0;
 }
 
+@media screen and (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --bg: #0f1210;
+    --card: #191d1a;
+    --ink: #f1efe9;
+    --muted: #8c968c;
+    --line: #2a2f2b;
+    --line-strong: #3d443e;
+    --accent: #7fd99b;
+    --accent-ink: #0f1210;
+    --accent-soft: #20291f;
+    --accent-stripe: #4f9a68;
+    --neutral-soft: #232823;
+    --warn: #f2c14e;
+    --danger: #ff8a80;
+    --toast-bg: #f1efe9;
+    --toast-ink: #0f1210;
+    --toast-link: #2f6f4f;
+    --sidebar-bg: #141715;
+
+    --mm-ink: #1c1b1a;
+    --mm-0: #5b7a63; --mm-1: #6a7a8f; --mm-2: #8a7a94;
+    --mm-3: #9a8478; --mm-4: #7a8a6a; --mm-5: #8a9a9a; --mm-6: #7a94a0;
+  }
+}
+@media screen {
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --bg: #0f1210;
+    --card: #191d1a;
+    --ink: #f1efe9;
+    --muted: #8c968c;
+    --line: #2a2f2b;
+    --line-strong: #3d443e;
+    --accent: #7fd99b;
+    --accent-ink: #0f1210;
+    --accent-soft: #20291f;
+    --accent-stripe: #4f9a68;
+    --neutral-soft: #232823;
+    --warn: #f2c14e;
+    --danger: #ff8a80;
+    --toast-bg: #f1efe9;
+    --toast-ink: #0f1210;
+    --toast-link: #2f6f4f;
+    --sidebar-bg: #141715;
+
+    --mm-ink: #1c1b1a;
+    --mm-0: #5b7a63; --mm-1: #6a7a8f; --mm-2: #8a7a94;
+    --mm-3: #9a8478; --mm-4: #7a8a6a; --mm-5: #8a9a9a; --mm-6: #7a94a0;
+  }
+}
+
 * { box-sizing: border-box; }
+
+/* 表單元件預設是白底黑字，深色模式下要跟著變數走；個別樣式另有指定者照舊 */
+input, textarea, select { background: var(--card); color: var(--ink); }
 
 body {
   margin: 0;
@@ -71,7 +138,7 @@ body {
   padding: 0 5px;
   border-radius: 9px;
   background: var(--accent);
-  color: #fff;
+  color: var(--accent-ink);
   font-size: 11px;
   line-height: 18px;
   text-align: center;
@@ -117,7 +184,7 @@ body {
   padding: 3px 8px;
   border: 1px solid var(--line);
   border-radius: 6px;
-  background: #fff;
+  background: var(--card);
   font: inherit;
   font-size: 11px;
   cursor: pointer;
@@ -167,7 +234,7 @@ body.sidebar-collapsed .icon-btn { display: block; }
   font-size: 13px;
   cursor: pointer;
 }
-.project-chips button.on { border-color: var(--accent); background: var(--accent); color: #fff; }
+.project-chips button.on { border-color: var(--accent); background: var(--accent); color: var(--accent-ink); }
 .project-chips button.add { border-style: dashed; color: var(--accent); }
 .project-chips .muted { margin: 0; }
 
@@ -259,7 +326,7 @@ button:disabled { opacity: .5; cursor: default; }
 .start button {
   background: var(--accent);
   border-color: var(--accent);
-  color: #fff;
+  color: var(--accent-ink);
 }
 
 .start select {
@@ -335,7 +402,7 @@ button:disabled { opacity: .5; cursor: default; }
 }
 
 .actions { display: flex; gap: 8px; }
-.actions button.danger { color: #a33; }
+.actions button.danger { color: var(--danger); }
 
 /* 「放棄重新生成」＋「再次上傳」成組：相連的按鈕，再次上傳為主要動作 */
 .btn-group { display: inline-flex; }
@@ -344,8 +411,8 @@ button:disabled { opacity: .5; cursor: default; }
 .btn-group.paired button:first-child { border-radius: 8px 0 0 8px; }
 .btn-group.paired button:last-child { border-radius: 0 8px 8px 0; margin-left: -1px; }
 .btn-group.paired button:hover:not(:disabled) { z-index: 1; }
-.btn-group.paired #btn-upload { background: var(--accent); border-color: var(--accent); color: #fff; }
-.btn-group.paired #btn-upload:hover:not(:disabled) { filter: brightness(1.1); color: #fff; }
+.btn-group.paired #btn-upload { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.btn-group.paired #btn-upload:hover:not(:disabled) { filter: brightness(1.1); color: var(--accent-ink); }
 
 .block { padding: 20px 0; border-bottom: 1px solid var(--line); }
 .block:last-child { border-bottom: 0; padding-bottom: 0; }
@@ -370,7 +437,7 @@ button:disabled { opacity: .5; cursor: default; }
 .lang-switch button { border-radius: 0; font-size: 13px; }
 .lang-switch button:first-child { border-radius: 8px 0 0 8px; }
 .lang-switch button:last-child { border-radius: 0 8px 8px 0; margin-left: -1px; }
-.lang-switch button.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+.lang-switch button.on { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
 
 /* 封面：淡色底＋同色系線條插圖，與手機列表卡片相同；svg 已由後端過濾 */
 .cover-row { display: flex; align-items: center; gap: 16px; }
@@ -408,7 +475,8 @@ button:disabled { opacity: .5; cursor: default; }
 }
 
 /* markmap 節點文字放大；.markmap-foreign 是文字容器 */
-#mindmap .markmap-foreign, #pp-mindmap .markmap-foreign, #mindmap-full .markmap-foreign { font-size: 18px; }
+/* 文字色用 --ink 跟隨深/淺色模式 */
+#mindmap .markmap-foreign, #pp-mindmap .markmap-foreign, #mindmap-full .markmap-foreign { font-size: 18px; color: var(--ink); }
 
 .mindmap-full-btn, .mindmap-overlay-bar button {
   display: flex;
@@ -468,7 +536,7 @@ body.scroll-locked { overflow: hidden; }
 .tags { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0 0; padding: 0; }
 
 .tags span {
-  background: #eef3ef;
+  background: var(--accent-soft);
   color: var(--accent);
   border-radius: 999px;
   padding: 3px 12px;
@@ -502,7 +570,7 @@ body.scroll-locked { overflow: hidden; }
 .tag-review td button.chosen {
   background: var(--accent);
   border-color: var(--accent);
-  color: #fff;
+  color: var(--accent-ink);
 }
 
 /* 進度條 */
@@ -554,8 +622,8 @@ body.scroll-locked { overflow: hidden; }
   width: 100%;
   background-image: linear-gradient(
     90deg,
-    var(--accent) 25%, #6ea98a 25%, #6ea98a 50%,
-    var(--accent) 50%, var(--accent) 75%, #6ea98a 75%
+    var(--accent) 25%, var(--accent-stripe) 25%, var(--accent-stripe) 50%,
+    var(--accent) 50%, var(--accent) 75%, var(--accent-stripe) 75%
   );
   background-size: 28px 100%;
   animation: flow 1s linear infinite;
@@ -581,8 +649,8 @@ body.scroll-locked { overflow: hidden; }
 }
 
 .spinner[hidden] { display: none; }
-/* 深色底的按鈕上改用白色，原本的綠色會看不見 */
-button.primary .spinner { border-color: rgba(255, 255, 255, .35); border-top-color: #fff; }
+/* 實心主色按鈕上改用按鈕文字色，原本的主色會看不見 */
+button.primary .spinner { border-color: color-mix(in srgb, var(--accent-ink) 35%, transparent); border-top-color: var(--accent-ink); }
 button .spinner { margin-right: 4px; }
 
 @keyframes spin {
@@ -594,7 +662,7 @@ button .spinner { margin-right: 4px; }
 }
 
 .ep-status { color: var(--accent); font-size: 13px; }
-#btn-cancel-job, #btn-delete-job { color: #a33; }
+#btn-cancel-job, #btn-delete-job { color: var(--danger); }
 .ep-error { color: var(--warn); font-size: 13px; }
 
 /* 逐字稿 */
@@ -712,10 +780,10 @@ a.seg-time:hover { color: var(--accent); text-decoration: underline; }
   border-radius: 14px;
   background: var(--card);
 }
-.episode-list li.ep-card:hover { border-color: #cfcac2; }
+.episode-list li.ep-card:hover { border-color: var(--line-strong); }
 .episode-list li.ep-card.selected {
   border-color: var(--accent);
-  background: #eef3ef;
+  background: var(--accent-soft);
 }
 .episode-list li.selected .ep-name { color: var(--accent); }
 
@@ -732,7 +800,7 @@ a.seg-time:hover { color: var(--accent); text-decoration: underline; }
   color: var(--cover-color);
 }
 .ep-cover svg { width: 28px; height: 28px; overflow: visible; }
-.ep-cover-empty { background: #f0eeeb; color: var(--muted); }
+.ep-cover-empty { background: var(--neutral-soft); color: var(--muted); }
 .ep-cover-empty .kind-icon { width: 20px; height: 20px; }
 
 .ep-body { flex: 1; min-width: 0; }
@@ -769,6 +837,8 @@ a.seg-time:hover { color: var(--accent); text-decoration: underline; }
 
 dialog {
   border: 1px solid var(--line);
+  background: var(--card);
+  color: var(--ink);
   border-radius: 12px;
   padding: 24px;
   min-width: 260px;
@@ -792,7 +862,7 @@ dialog menu { display: flex; gap: 8px; justify-content: flex-end; margin: 20px 0
   font: inherit;
 }
 .paste-dialog textarea { resize: vertical; line-height: 1.6; }
-dialog button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+dialog button.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
 
 /* 文章原文：只有段落，沒有時間與說話者 */
 .article-text p { margin: 0 0 14px; line-height: 1.8; }
@@ -812,7 +882,7 @@ dialog button.primary { background: var(--accent); border-color: var(--accent); 
 .article-text .paper-table-caption { margin: 0 0 6px; font-size: 13px; font-weight: 600; }
 .article-text .paper-ref { margin: 0 0 6px; font-size: 13px; color: var(--muted); line-height: 1.6; }
 
-.error { color: #a33; }
+.error { color: var(--danger); }
 
 /* 窄螢幕：側邊欄改為覆蓋式抽屜，由 ☰ 開關 */
 /* ── 研究專案頁（/project#<id>，獨立頁面，不含單集清單）────────
@@ -840,7 +910,7 @@ dialog button.primary { background: var(--accent); border-color: var(--accent); 
   font: inherit;
   font-size: 14px;
 }
-.pp-delete { margin-right: auto; color: #a33; }
+.pp-delete { margin-right: auto; color: var(--danger); }
 #pp-edit-form input, #pp-edit-form textarea {
   display: block;
   width: 100%;
@@ -858,8 +928,8 @@ dialog button.primary { background: var(--accent); border-color: var(--accent); 
 .pp-main { display: grid; gap: 14px; min-width: 0; }
 .project-page .icon-sm { width: 14px; height: 14px; flex: none; }
 .project-page .icon-xs { width: 12px; height: 12px; flex: none; }
-.project-page button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
-.project-page button.primary:hover:not(:disabled) { filter: brightness(1.1); color: #fff; }
+.project-page button.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.project-page button.primary:hover:not(:disabled) { filter: brightness(1.1); color: var(--accent-ink); }
 .project-page button.small, .pp-head button { padding: 4px 10px; font-size: 13px; }
 .link-btn {
   padding: 2px 4px;
@@ -870,7 +940,7 @@ dialog button.primary { background: var(--accent); border-color: var(--accent); 
   font-weight: 600;
 }
 .link-btn:hover:not(:disabled) { text-decoration: underline; }
-.link-btn.danger { color: #a33; }
+.link-btn.danger { color: var(--danger); }
 .pp-warn { color: var(--warn); font-weight: 600; }
 .pp-grow { flex: 1; }
 .pp-empty { padding: 16px 4px; }
@@ -995,7 +1065,7 @@ dialog button.primary { background: var(--accent); border-color: var(--accent); 
 .pp-search input { flex: 1; min-width: 0; padding: 8px 0; border: 0; outline: none; background: none; font: inherit; font-size: 14px; }
 .pp-chips { display: flex; flex-wrap: wrap; gap: 6px; }
 .pp-chips button { padding: 3px 12px; border-radius: 999px; font-size: 13px; }
-.pp-chips button[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: #fff; }
+.pp-chips button[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
 /* 可能相關：虛線框，與類型篩選區分 */
 .pp-chips .pp-chip-cand {
   display: inline-flex;
@@ -1088,6 +1158,17 @@ dialog button.primary { background: var(--accent); border-color: var(--accent); 
 }
 .topbar-link:hover { border-color: var(--accent); color: var(--accent); }
 
+/* 頁首右側的深/淺色切換，三頁共用 */
+.theme-btn {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 9px;
+  color: var(--muted);
+}
+.theme-btn svg { width: 20px; height: 20px; display: block; }
+
 /* ── 專案管理頁（/projects）：左側單集清單，拖進右側的專案資料夾格子歸類 ── */
 .pm-layout {
   display: grid;
@@ -1120,7 +1201,7 @@ dialog button.primary { background: var(--accent); border-color: var(--accent); 
   padding: 0 8px;
   border-radius: 999px;
   background: var(--accent);
-  color: #fff;
+  color: var(--accent-ink);
   font-size: 11px;
   font-weight: 700;
   line-height: 20px;
@@ -1143,8 +1224,8 @@ body.pm-dragging .pm-folder[data-id] { border-style: dashed; border-color: var(-
 /* 輸入框預設寬度會把格子撐開，改成跟著格子寬度 */
 .pm-new form { display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; width: 100%; }
 .pm-new input { width: 100%; min-width: 0; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; font: inherit; font-size: 14px; background: var(--card); }
-.pm-new button.primary { background: var(--accent); border-color: var(--accent); color: #fff; padding: 8px 12px; }
-.pm-new button.primary:hover { filter: brightness(1.1); color: #fff; }
+.pm-new button.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); padding: 8px 12px; }
+.pm-new button.primary:hover { filter: brightness(1.1); color: var(--accent-ink); }
 
 .pm-side { display: flex; flex-direction: column; min-height: 0; border-right: 1px solid var(--line); background: var(--sidebar-bg); }
 .pm-side-head { display: grid; gap: 8px; padding: 16px 16px 8px; }
@@ -1164,7 +1245,7 @@ body.pm-dragging .pm-folder[data-id] { border-style: dashed; border-color: var(-
   font-weight: 600;
   line-height: 18px;
 }
-.pm-badge.none { background: #f0eeeb; color: var(--muted); }
+.pm-badge.none { background: var(--neutral-soft); color: var(--muted); }
 .pm-toast {
   position: fixed;
   left: 50%;
@@ -1176,12 +1257,12 @@ body.pm-dragging .pm-folder[data-id] { border-style: dashed; border-color: var(-
   max-width: calc(100vw - 32px);
   padding: 10px 16px;
   border-radius: 999px;
-  background: var(--ink);
-  color: #fff;
+  background: var(--toast-bg);
+  color: var(--toast-ink);
   font-size: 14px;
   transform: translateX(-50%);
 }
-.pm-toast .link-btn { color: #9fd3b4; }
+.pm-toast .link-btn { color: var(--toast-link); }
 .pm-toast[hidden] { display: none; }
 @media (max-width: 900px) {
   .pm-layout { grid-template-columns: 300px minmax(0, 1fr); }

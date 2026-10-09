@@ -6,7 +6,7 @@
 //
 // CACHE_VERSION 由 scripts/stamp-assets.py 依外殼內容的雜湊填入，
 // 內容一變版本就變，activate 會清掉舊版快取。
-const CACHE_VERSION = "podscript-vbef67a17f3c6";
+const CACHE_VERSION = "podscript-vf51e88cd6e82";
 
 // 外殼檔案。config.js 不列入：它含 API 位址與 Google Client ID，
 // 部署環境不同，快取住會讓換環境後連到舊後端。

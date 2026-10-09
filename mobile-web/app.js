@@ -290,6 +290,12 @@ function formatDuration(sec) {
   return `${m} 分鐘`;
 }
 
+/** 長度：音檔與影片為分鐘；論文的 duration_sec 存的是頁數。 */
+function lengthLabel(ep) {
+  if (!ep.duration_sec) return "";
+  return isPaper(ep) ? `${ep.duration_sec} 頁` : formatDuration(ep.duration_sec);
+}
+
 function getSort() {
   return localStorage.getItem(SORT_KEY) || "created_at";
 }
@@ -340,7 +346,7 @@ function renderEpisodeCard(ep) {
       <div class="ep-body">
         <span class="ep-title">${escapeHtml(ep.title)}</span>
         ${ep.title_translated ? `<span class="ep-title-zh">${escapeHtml(ep.title_translated)}</span>` : ""}
-        <span class="ep-meta">${kindIconHtml(ep)}${escapeHtml(ep.podcast_name)}${date ? " · " + date.slice(0, 10) : ""}${ep.duration_sec ? " · " + formatDuration(ep.duration_sec) : ""}</span>
+        <span class="ep-meta">${kindIconHtml(ep)}${escapeHtml(ep.podcast_name)}${date ? " · " + date.slice(0, 10) : ""}${ep.duration_sec ? " · " + lengthLabel(ep) : ""}</span>
         ${snippetHtml(ep)}
         <span class="tags">${cardTagsHtml(ep.hashtags)}</span>
       </div>
@@ -1785,7 +1791,7 @@ async function loadDetail(guid, query = "", options = {}) {
   transcriptLang = "zh"; // 每次開單集都回到預設的中文
   renderLangSwitch(ep);
   document.querySelector("#ep-meta").textContent =
-    `${ep.podcast_name}${ep.published_at ? " · " + ep.published_at.slice(0, 10) : ""}${ep.duration_sec ? " · " + formatDuration(ep.duration_sec) : ""}`;
+    `${ep.podcast_name}${ep.published_at ? " · " + ep.published_at.slice(0, 10) : ""}${ep.duration_sec ? " · " + lengthLabel(ep) : ""}`;
   renderSourceLink(ep);
   document.querySelector('.subtab[data-sub="transcript"]').textContent = isText(ep) ? "原文" : "逐字稿";
   document.querySelector("#summary-text").textContent = ep.summary || "（尚無摘要）";

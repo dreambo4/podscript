@@ -153,7 +153,7 @@ function showProgress(job) {
   const running = !job.done && !failed;
 
   $("progress-message").textContent = job.cancelled
-    ? "已取消排隊"
+    ? job.message
     : failed
     ? `處理失敗：${job.error}`
     : job.percent != null
@@ -169,9 +169,11 @@ function showProgress(job) {
   resume.dataset.guid = job.guid;
   resume.textContent = job.cancelled ? "▶ 重新排入" : "▶ 繼續處理";
 
-  // 排隊中可終止；已開始處理的不行
+  // 排隊中與處理中都可終止
   const cancel = $("btn-cancel-job");
-  cancel.hidden = job.done || job.stage !== "queued";
+  cancel.hidden = job.done;
+  cancel.textContent = job.stage === "queued" ? "終止排隊" : "終止處理";
+  cancel.disabled = job.message === "正在終止…";
   cancel.dataset.guid = job.guid;
 
   // 失敗或已取消排隊（處理沒有完成）的可以整筆刪除
@@ -235,13 +237,20 @@ $("btn-delete-job").addEventListener("click", async (e) => {
   }
 });
 
-/** 從排隊中移除（只在單集的進度頁提供）；已開始處理的會被後端拒絕（409）。 */
+/** 終止排隊中或處理中的任務（只在單集的進度頁提供）。 */
 async function cancelQueuedJob(guid, btn) {
   const job = allEpisodes.find((x) => x.guid === guid);
-  if (!confirm(`終止排隊中的「${job?.title || guid}」？\n之後可在這一集按「重新排入」。`)) return;
+  const title = job?.title || guid;
+  const queued = job?.stage === "queued";
+  const message = queued
+    ? `終止排隊中的「${title}」？\n之後可在這一集按「重新排入」。`
+    : `終止「${title}」的處理？\n已完成的階段（例如已下載、已轉錄）會保留，之後按「重新排入」會從中斷處接續。`;
+  if (!confirm(message)) return;
   if (btn) btn.disabled = true;
   try {
     await api(`/api/jobs/${encodeURIComponent(guid)}/cancel`, { method: "POST" });
+    // 處理中的需要幾秒停下外部程序，稍等再更新畫面
+    if (!queued) await new Promise((resolve) => setTimeout(resolve, 2000));
     await Promise.all([loadLibrary(), loadQueue()]);
     if (location.hash.slice(1) === guid) await poll(guid);
   } catch (err) {
@@ -454,11 +463,16 @@ function renderMindmap(code) {
   try {
     // window.renderMarkmap 由 index.html 的 module 腳本注入（markmap 渲染）。
     // 頁面內是唯讀縮圖：不攔滾輪與拖曳，要縮放時點進全螢幕。
-    window.renderMarkmap(code, box, { interactive: false });
+    window.renderMarkmap(code, box, { rootColor: mindmapRootColor(), interactive: false });
   } catch (err) {
     box.innerHTML = `<p class="error">心智圖語法錯誤，請重新生成</p>`;
   }
 }
+
+// 切換深淺色：root 色是渲染時算定的，有心智圖時重繪
+window.addEventListener("podscript:theme", () => {
+  if (current?.summary?.mindmap) renderMindmap(current.summary.mindmap);
+});
 
 $("btn-mindmap-full").addEventListener("click", (e) => {
   e.stopPropagation();
@@ -943,9 +957,7 @@ function renderUploadState() {
   const meta = [
     current.episode.podcast_name,
     (current.episode.published_at || "").slice(0, 10),
-    current.episode.duration_sec
-      ? `${Math.round(current.episode.duration_sec / 60)} 分鐘`
-      : "",
+    lengthLabel(isPaper(current.episode), current.episode.duration_sec),
     current.provenance?.transcribe_model,
     uploaded ? `已上傳 ${current.uploaded_at.slice(0, 10)}` : "尚未上傳",
     current.needs_reupload ? "重新生成的內容尚未上傳" : "",

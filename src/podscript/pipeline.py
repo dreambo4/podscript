@@ -582,10 +582,24 @@ def save_result(directory: Path, result: Result) -> None:
 
 def _write_outputs(directory: Path, result: Result) -> None:
     """寫出供檢視與後續摘要使用的檔案。"""
-    (directory / "transcript.json").write_text(
-        json.dumps(result.to_dict(), ensure_ascii=False, indent=2), encoding="utf-8"
+    _write_atomic(
+        directory / "transcript.json", json.dumps(result.to_dict(), ensure_ascii=False, indent=2)
     )
-    (directory / "transcript.txt").write_text(format_text(result), encoding="utf-8")
+    _write_atomic(directory / "transcript.txt", format_text(result))
+
+
+def _write_atomic(path: Path, text: str) -> None:
+    """先寫暫存檔再改名：寫到一半出錯（例如無法編碼的字元）時不留下空檔或殘缺檔。
+
+    transcript.json 存在即視為該階段完成，殘缺的檔案會讓單集清單讀取失敗。
+    """
+    partial = path.with_name(path.name + ".partial")
+    try:
+        partial.write_text(text, encoding="utf-8")
+    except BaseException:
+        partial.unlink(missing_ok=True)
+        raise
+    partial.replace(path)
 
 
 def format_text(result: Result) -> str:

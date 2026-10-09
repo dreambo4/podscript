@@ -123,6 +123,7 @@ def from_pdf(pdf: bytes, *, filename: str = "") -> Paper:
         raise ResolveError(f"PDF 無法開啟（可能已損毀或有密碼保護）：{exc}") from exc
 
     try:
+        pages = len(document)
         lines = _read_lines(document)
     finally:
         document.close()
@@ -145,6 +146,8 @@ def from_pdf(pdf: bytes, *, filename: str = "") -> Paper:
         podcast_name="論文",
         title=title or "未命名論文",
         mp3_url="",
+        # 論文沒有長度，duration_sec 改存頁數，介面顯示為「N 頁」
+        duration_sec=pages,
     )
     return Paper(episode=episode, blocks=blocks, pdf=pdf)
 
@@ -159,8 +162,22 @@ def _read_lines(document: pdfium.PdfDocument) -> list[_Line]:
         textpage = page.get_textpage()
         height = page.get_height()
         chars: list[tuple[str, tuple, bool]] = []
-        for i in range(textpage.count_chars()):
-            ch = chr(pdfium_c.FPDFText_GetUnicode(textpage, i))
+        count = textpage.count_chars()
+        i = 0
+        while i < count:
+            code = pdfium_c.FPDFText_GetUnicode(textpage, i)
+            # pdfium 以 UTF-16 回傳，基本字集以外的字元（部分數學符號、罕用字）會拆成兩個代理碼，
+            # 要組回一個字元；落單的代理碼無法存成 UTF-8，以替代字元表示
+            if 0xD800 <= code <= 0xDBFF and i + 1 < count:
+                low = pdfium_c.FPDFText_GetUnicode(textpage, i + 1)
+                if 0xDC00 <= low <= 0xDFFF:
+                    ch = chr(0x10000 + ((code - 0xD800) << 10) + (low - 0xDC00))
+                    box = textpage.get_charbox(i, loose=True)
+                    chars.append((ch, box, _font_style(textpage, i)))
+                    i += 2  # 兩個代理碼組成一個字元
+                    continue
+            ch = "\ufffd" if 0xD800 <= code <= 0xDFFF else chr(code)
+            at, i = i, i + 1  # 先前進：下面的 continue 不能讓迴圈停在同一個字元
             if ch == "\n":
                 _append_line(lines, chars, index, height)
                 chars = []
@@ -168,8 +185,8 @@ def _read_lines(document: pdfium.PdfDocument) -> list[_Line]:
             if ch == "\r":
                 continue
             if ch.strip() and ch != SOFT_HYPHEN:
-                box = textpage.get_charbox(i, loose=True)
-                chars.append((ch, box, _font_style(textpage, i)))
+                box = textpage.get_charbox(at, loose=True)
+                chars.append((ch, box, _font_style(textpage, at)))
             else:
                 chars.append((ch, None, (False, False)))
         _append_line(lines, chars, index, height)

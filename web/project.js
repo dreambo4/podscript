@@ -262,7 +262,7 @@ function questionStateSvg(status) {
   if (status === "partial") {
     return `<svg viewBox="0 0 22 22"><circle cx="11" cy="11" r="8" fill="none" stroke="${color}" stroke-width="2"/><path d="M11 3a8 8 0 0 1 0 16z" fill="${color}"/></svg>`;
   }
-  return `<svg viewBox="0 0 22 22"><circle cx="11" cy="11" r="9" fill="${color}"/><path d="M7 11.5l2.5 2.5L15 8.5" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+  return `<svg viewBox="0 0 22 22"><circle cx="11" cy="11" r="9" fill="${color}"/><path d="M7 11.5l2.5 2.5L15 8.5" fill="none" stroke="var(--accent-ink)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
 }
 
 /** 這題的缺口；產生 AI 整理之後才新增的問題沒有缺口。 */
@@ -770,7 +770,7 @@ function renderProjectMindmap() {
     : "尚未產生。按左上角專案卡片的「產生 AI 整理」，會把各篇內容整理成一張專案心智圖。";
   if (!code) return;
   try {
-    window.renderMarkmap(code, $("pp-mindmap"), { interactive: false });
+    window.renderMarkmap(code, $("pp-mindmap"), { rootColor: mindmapRootColor(), interactive: false });
   } catch {
     $("pp-mindmap").innerHTML = `<p class="error">心智圖語法錯誤，請重新產生</p>`;
   }
@@ -899,6 +899,14 @@ async function flushNote(key) {
 function flushNotes() {
   for (const key of [...noteEditors.keys()]) flushNote(key);
 }
+
+// 切換深淺色：心智圖 root 色與筆記編輯器配色是建立時算定的，要重新套用
+window.addEventListener("podscript:theme", () => {
+  if (project && projectTab === "mindmap") renderProjectMindmap();
+  document.querySelectorAll(".md-editor").forEach((host) => {
+    window.OverType?.getInstance(host)?.setTheme(overtypeTheme());
+  });
+});
 
 window.addEventListener("beforeunload", (e) => {
   if ([...noteEditors.values()].some((n) => n.value !== n.base)) e.preventDefault();

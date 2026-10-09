@@ -133,11 +133,16 @@ def to_wav(
     cmd += ["-i", str(mp3_path)]
     if duration_sec is not None:
         cmd += ["-t", str(duration_sec)]
-    cmd += ["-ac", "1", "-ar", str(SAMPLE_RATE), "-c:a", "pcm_s16le", str(target)]
+    # 先寫暫存檔再改名：轉檔中途被終止時不留下不完整的 wav，
+    # 否則下次接續會因檔案存在而跳過轉檔，拿殘缺的音檔去轉錄。
+    partial = target.with_name(f"audio{suffix}.partial.wav")
+    cmd += ["-ac", "1", "-ar", str(SAMPLE_RATE), "-c:a", "pcm_s16le", str(partial)]
 
     result = subprocess.run(cmd, capture_output=True, text=True)
     if result.returncode != 0:
+        partial.unlink(missing_ok=True)
         raise AudioError(f"ffmpeg 轉檔失敗：{result.stderr.strip()[:500]}")
+    partial.replace(target)
     return target
 
 

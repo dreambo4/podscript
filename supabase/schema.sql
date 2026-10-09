@@ -14,7 +14,7 @@ create table if not exists episodes (
   podcast_name    text not null,
   title           text not null,
   published_at    timestamptz,                     -- Podcast 原始發布時間
-  duration_sec    int,
+  duration_sec    int,                             -- 音檔長度（秒）；論文存 PDF 頁數
   summary         text,
   mindmap_mermaid text,                            -- Mermaid 原始碼
   hashtags        text[] default '{}',             -- 最多 5 個主題標籤，不含人名、語意不重疊

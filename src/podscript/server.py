@@ -8,7 +8,10 @@ from __future__ import annotations
 import json
 import os
 import re
+import signal
+import subprocess
 import threading
+import time
 import traceback
 from collections import Counter
 from dataclasses import dataclass, field
@@ -54,7 +57,9 @@ class Job:
     error: str = ""
     # 開始處理時選的研究專案；處理完成才歸入，失敗不歸入（spec §6.1）
     project_ids: list[str] = field(default_factory=list)
-    cancelled: bool = False  # 排隊中被使用者終止；可按「重新排入」接續
+    cancelled: bool = False  # 被使用者終止（排隊中或處理中）；可按「重新排入」接續
+    # 處理中被要求終止；不寫入 job.json（to_dict 不含），只供執行中的執行緒判斷
+    cancel_requested: bool = field(default=False, repr=False)
     started_at: str = field(
         default_factory=lambda: datetime.now(timezone.utc).isoformat()
     )
@@ -264,6 +269,8 @@ async def start_paper(request: Request, filename: str = "", project_ids: str = "
             project_ids=[p for p in project_ids.split(",") if p],
         )
         job.save()
+        # 先存 PDF：排隊期間服務重啟時，接續處理（_resume_task）要靠這份檔案
+        (audio.episode_dir(guid) / pipeline.PAPER_PDF).write_bytes(parsed.pdf)
         _jobs[guid] = job
 
     task = _paper_task(parsed, filename)
@@ -362,10 +369,68 @@ def _worker() -> None:
 threading.Thread(target=_worker, daemon=True, name="job-worker").start()
 
 
+class JobCancelled(Exception):
+    """使用者終止了處理中的任務。"""
+
+
+def _kill_job_processes(guid: str) -> int:
+    """停掉這一集正在跑的外部程序（ffmpeg、whisper-cli、說話者分離、claude -p）。
+
+    只找本服務行程底下、指令含這集代碼（檔案路徑都在 audio/<guid>/）的子孫程序，
+    不影響專案 AI 整理或翻譯這類同時在跑的其他程序。
+
+    Returns:
+        送出終止訊號的程序數。
+    """
+    out = subprocess.run(
+        ["ps", "-A", "-o", "pid=,ppid=,command="], capture_output=True, text=True
+    ).stdout
+    children: dict[int, list[int]] = {}
+    commands: dict[int, str] = {}
+    for line in out.splitlines():
+        parts = line.split(None, 2)
+        if len(parts) < 3:
+            continue
+        pid, ppid = int(parts[0]), int(parts[1])
+        children.setdefault(ppid, []).append(pid)
+        commands[pid] = parts[2]
+
+    targets, stack = [], list(children.get(os.getpid(), []))
+    while stack:
+        pid = stack.pop()
+        stack.extend(children.get(pid, []))
+        if guid in commands.get(pid, ""):
+            targets.append(pid)
+
+    for pid in targets:
+        try:
+            os.kill(pid, signal.SIGTERM)
+        except ProcessLookupError:
+            pass
+    # 給程序幾秒自行結束，仍在的強制停止
+    deadline = time.time() + 5
+    for pid in targets:
+        while time.time() < deadline:
+            try:
+                os.kill(pid, 0)
+            except ProcessLookupError:
+                break
+            time.sleep(0.2)
+        else:
+            try:
+                os.kill(pid, signal.SIGKILL)
+            except ProcessLookupError:
+                pass
+    return len(targets)
+
+
 def _run(job: Job, task: Task) -> None:
     """背景執行整條流程，把進度寫回 job。"""
 
     def on_progress(stage: str, message: str, percent: int | None = None) -> None:
+        # 終止時外部程序已被停掉；這裡在下一次回報進度時中斷純 Python 的步驟
+        if job.cancel_requested:
+            raise JobCancelled()
         job.stage = stage
         job.message = message
         job.percent = percent
@@ -375,6 +440,9 @@ def _run(job: Job, task: Task) -> None:
 
     try:
         task(on_progress)
+        # 摘要失敗不一定會拋例外；被終止的一律不算完成，也不歸入專案
+        if job.cancel_requested:
+            raise JobCancelled()
         job.stage = "done"
         job.message = "完成"
         job.percent = None
@@ -386,10 +454,16 @@ def _run(job: Job, task: Task) -> None:
                 job.message = f"完成；歸入研究專案失敗：{exc}"
         notify.job_done(job.title, _elapsed_minutes(job))
     except Exception as exc:  # 背景執行緒需攔下所有例外，否則錯誤不會傳到前端
-        job.error = str(exc) or exc.__class__.__name__
-        job.message = "處理失敗"
-        traceback.print_exc()
-        notify.job_failed(job.title, job.error)
+        if job.cancel_requested:
+            # 已完成的階段（下載、轉錄等）檔案保留，「重新排入」會從中斷處接續
+            job.cancelled = True
+            job.error = "已終止處理"
+            job.message = "已終止處理"
+        else:
+            job.error = str(exc) or exc.__class__.__name__
+            job.message = "處理失敗"
+            traceback.print_exc()
+            notify.job_failed(job.title, job.error)
     finally:
         job.done = True
         job.save()
@@ -418,16 +492,26 @@ def list_jobs() -> list[dict]:
 
 @app.post("/api/jobs/{guid}/cancel")
 def cancel_job(guid: str) -> dict:
-    """終止排隊中的任務。已開始處理的不能終止（回 409），避免轉錄做到一半留下不完整的檔案。"""
+    """終止排隊中或處理中的任務。
+
+    排隊中：直接移出佇列。處理中：停掉這一集的外部程序並標記終止，執行緒隨即結束；
+    已完成的階段檔案保留（各階段都先寫暫存檔或完成後才寫檔），可按「重新排入」接續。
+    """
     job = _cancel_queued(guid)
     if job is not None:
         return job.to_dict()
+    with _queue_cv:
+        running = _current if _current is not None and _current.guid == guid else None
+    if running is not None and not running.done:
+        running.cancel_requested = True
+        running.message = "正在終止…"
+        running.save()
+        _kill_job_processes(guid)
+        return running.to_dict()
     current = _read_job(guid)
     if current is None:
         raise HTTPException(status_code=404, detail="查無此任務")
-    if current.done:
-        raise HTTPException(status_code=409, detail="這集已經結束處理，不需要終止")
-    raise HTTPException(status_code=409, detail="這集已經開始處理，無法終止；只能終止排隊中的")
+    raise HTTPException(status_code=409, detail="這集已經結束處理，不需要終止")
 
 
 @app.post("/api/jobs/{guid}/resume")
@@ -532,7 +616,12 @@ def list_episodes() -> list[dict]:
             continue
 
         job = _read_job(directory.name)
-        result = pipeline.load_result(directory)
+        try:
+            result = pipeline.load_result(directory)
+        except (ValueError, OSError, TypeError):
+            # 單一單集的檔案損毀不該讓整個清單失敗；有任務紀錄的仍會以失敗狀態列出
+            traceback.print_exc()
+            result = None
         if result is None and job is None:
             continue
 

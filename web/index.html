@@ -6,6 +6,8 @@
 <title>podscript · 本機</title>
 <link rel="icon" type="image/svg+xml" href="favicon.svg">
 <link rel="stylesheet" href="style.css">
+<!-- 先套上記住的深/淺色，避免載入時閃一下（切換邏輯在 common.js） -->
+<script>try { const t = localStorage.getItem("podscript_theme"); if (t) document.documentElement.dataset.theme = t; } catch {}</script>
 </head>
 <body>
 
@@ -45,12 +47,20 @@
     <input id="pdf-file" type="file" accept="application/pdf,.pdf" hidden>
   </form>
   <a class="topbar-link" href="/projects">研究專案</a>
+  <button id="btn-theme" class="theme-btn" type="button" aria-label="切換為深色" title="切換為深色"><svg aria-hidden="true"><use href="#ic-moon"/></svg></button>
 </header>
 
 <div class="layout">
 
   <svg width="0" height="0" style="position:absolute;overflow:hidden;" aria-hidden="true">
     <defs>
+      <symbol id="ic-sun" viewBox="0 0 24 24">
+        <circle cx="12" cy="12" r="4.2" fill="none" stroke="currentColor" stroke-width="1.6"/>
+        <path d="M12 2.5v2.6M12 18.9v2.6M4.6 4.6l1.85 1.85M17.55 17.55l1.85 1.85M2.5 12h2.6M18.9 12h2.6M4.6 19.4l1.85-1.85M17.55 6.45l1.85-1.85" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+      </symbol>
+      <symbol id="ic-moon" viewBox="0 0 24 24">
+        <path d="M20 14.2A8.5 8.5 0 1 1 9.8 4a6.8 6.8 0 0 0 10.2 10.2Z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>
+      </symbol>
       <symbol id="ic-audio" viewBox="0 0 24 24">
         <path d="M4.5 15v-2.5a7.5 7.5 0 0 1 15 0V15" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
         <path d="M4.5 14.5h2a1.2 1.2 0 0 1 1.2 1.2v3.1a1.2 1.2 0 0 1-1.2 1.2h-.8a1.2 1.2 0 0 1-1.2-1.2zM19.5 14.5h-2a1.2 1.2 0 0 0-1.2 1.2v3.1a1.2 1.2 0 0 0 1.2 1.2h.8a1.2 1.2 0 0 0 1.2-1.2z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>
