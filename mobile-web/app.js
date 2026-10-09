@@ -344,8 +344,8 @@ function renderEpisodeCard(ep) {
     <a href="${href}" class="ep-link">
       ${coverHtml(ep)}
       <div class="ep-body">
-        <span class="ep-title">${escapeHtml(ep.title)}</span>
-        ${ep.title_translated ? `<span class="ep-title-zh">${escapeHtml(ep.title_translated)}</span>` : ""}
+        <span class="ep-title">${escapeHtml(ep.title_translated || ep.title)}</span>
+        ${ep.title_translated ? `<span class="ep-title-zh">${escapeHtml(ep.title)}</span>` : ""}
         <span class="ep-meta">${kindIconHtml(ep)}${escapeHtml(ep.podcast_name)}${date ? " · " + date.slice(0, 10) : ""}${ep.duration_sec ? " · " + lengthLabel(ep) : ""}</span>
         ${snippetHtml(ep)}
         <span class="tags">${cardTagsHtml(ep.hashtags)}</span>
@@ -1784,9 +1784,10 @@ async function loadDetail(guid, query = "", options = {}) {
   const ep = await api(`/episodes/${encodeURIComponent(guid)}`);
   detailEp = ep;
 
-  document.querySelector("#ep-title").textContent = ep.title;
+  // 有中文翻譯標題時以中文為主標題，原文標題放在下方副標題（#ep-title-zh）
+  document.querySelector("#ep-title").textContent = ep.title_translated || ep.title;
   const titleZh = document.querySelector("#ep-title-zh");
-  titleZh.textContent = ep.title_translated || "";
+  titleZh.textContent = ep.title_translated ? ep.title : "";
   titleZh.hidden = !ep.title_translated;
   transcriptLang = "zh"; // 每次開單集都回到預設的中文
   renderLangSwitch(ep);

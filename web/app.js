@@ -346,8 +346,9 @@ async function showEpisode(guid) {
   $("empty").hidden = true;
   $("progress").hidden = true;
   $("episode").hidden = false;
-  $("ep-title").textContent = data.episode.title;
-  $("ep-title-zh").textContent = data.episode.title_translated || "";
+  // 有中文翻譯標題時以中文為主標題，原文標題放在下方副標題（#ep-title-zh）
+  $("ep-title").textContent = data.episode.title_translated || data.episode.title;
+  $("ep-title-zh").textContent = data.episode.title_translated ? data.episode.title : "";
   $("ep-title-zh").hidden = !data.episode.title_translated;
   renderUploadState();
 

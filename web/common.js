@@ -72,11 +72,12 @@ function episodeRow(e, selected) {
         : "";
 
   const tags = (e.hashtags || []).map((t) => `<span>#${escapeHtml(t)}</span>`).join("");
+  // 有中文翻譯標題時以中文為主標題，原文標題放在下方小字（.ep-name-zh 為副標題樣式）
   return `<li data-guid="${e.guid}" class="ep-card${selected ? " selected" : ""}">
     ${listCoverHtml(e)}
     <div class="ep-body">
-      <span class="ep-name">${escapeHtml(e.title)}</span>
-      ${e.title_translated ? `<span class="ep-name-zh">${escapeHtml(e.title_translated)}</span>` : ""}
+      <span class="ep-name">${escapeHtml(e.title_translated || e.title)}</span>
+      ${e.title_translated ? `<span class="ep-name-zh">${escapeHtml(e.title)}</span>` : ""}
       ${meta ? `<span class="ep-meta"><svg class="kind-icon" role="img" aria-label="${label}"><use href="#${icon}"/></svg>${meta}</span>` : ""}
       ${status}
       ${tags ? `<span class="ep-tags">${tags}</span>` : ""}
