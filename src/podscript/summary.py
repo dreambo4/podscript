@@ -325,6 +325,20 @@ class SummaryProvider(ABC):
 
 
     @abstractmethod
+    def generate_json(self, prompt: str, *, model: str) -> tuple[dict, str]:
+        """依提示產生一個 JSON 物件，供研究專案的跨篇整理使用（見 project_ai）。
+
+        Args:
+            prompt: 完整提示；大量資料須寫檔並在提示中指明路徑，不可直接放進提示。
+
+        Returns:
+            (JSON 物件, 實際執行的模型 ID)。
+
+        Raises:
+            SummaryError: 生成失敗或回傳中找不到 JSON。
+        """
+
+    @abstractmethod
     def generate_translation(self, chunk_path: Path, *, model: str) -> dict[int, str]:
         """翻譯一批論文段落。
 
@@ -383,6 +397,14 @@ class ClaudeCliProvider(SummaryProvider):
         if cover is None:
             raise SummaryError("模型回傳的封面格式不正確，請再試一次")
         return cover
+
+    def generate_json(self, prompt: str, *, model: str = "sonnet") -> tuple[dict, str]:
+        stdout = self._run(prompt, model=model)
+        try:
+            envelope = json.loads(stdout)
+        except json.JSONDecodeError as exc:
+            raise SummaryError(f"CLI 輸出非 JSON：{stdout[:200]}") from exc
+        return _extract_json(envelope.get("result", "")), _resolve_model_id(envelope, fallback=model)
 
     def generate_translation(self, chunk_path: Path, *, model: str = "sonnet") -> dict[int, str]:
         stdout = self._run(TRANSLATE_PROMPT.format(path=chunk_path), model=model)

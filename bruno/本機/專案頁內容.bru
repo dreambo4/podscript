@@ -1,0 +1,18 @@
+meta {
+  name: 專案頁內容
+  type: http
+  seq: 28
+}
+
+get {
+  url: {{localBase}}/api/projects/{{projectId}}
+  body: none
+  auth: none
+}
+
+docs {
+  專案頁資料：名稱、說明、筆記（note、note_updated_at）、研究問題（依 position 排序）、
+  AI 整理（insights：claims、mindmap、gaps、source_guids、suggestions…，未產生為 null）、
+  各篇的 guid 與歸入時間（items，含尚未上傳的），以及 AI 產生進度（ai.insights／ai.suggestions）。
+  篇目的標題、封面等由前端從單集列表取得。查無此專案回 404；代碼格式錯誤回 400。
+}

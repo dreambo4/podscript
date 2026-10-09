@@ -1,0 +1,17 @@
+meta {
+  name: 產生AI整理
+  type: http
+  seq: 37
+}
+
+post {
+  url: {{localBase}}/api/projects/{{projectId}}/insights
+  body: none
+  auth: none
+}
+
+docs {
+  在背景以 claude -p 產生對照表、心智圖與研究問題缺口（同一次呼叫，只用各篇摘要，會消耗額度）。
+  立即回傳進度（同 AI整理進度.bru），以 GET /ai 輪詢；完成後寫入 project_insights，整組覆蓋。
+  已在產生中則不重複啟動。沒有已生成摘要的篇目時，error 為「專案內還沒有已生成摘要的篇目」。
+}

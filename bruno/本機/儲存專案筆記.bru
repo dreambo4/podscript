@@ -1,0 +1,23 @@
+meta {
+  name: 儲存專案筆記
+  type: http
+  seq: 29
+}
+
+put {
+  url: {{localBase}}/api/projects/{{projectId}}/note
+  body: json
+  auth: none
+}
+
+body:json {
+  {
+    "note": "## 目前的理解\n- ...",
+    "base": ""
+  }
+}
+
+docs {
+  儲存專案筆記（Markdown）。base 為開始編輯時載入的內容，回傳 {"note_updated_at": ...}。
+  另一台裝置已修改（資料庫內容與 base 不同）回 409，不覆蓋。
+}

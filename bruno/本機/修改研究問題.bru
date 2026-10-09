@@ -1,0 +1,23 @@
+meta {
+  name: 修改研究問題
+  type: http
+  seq: 32
+}
+
+put {
+  url: {{localBase}}/api/projects/{{projectId}}/questions/{{questionId}}
+  body: json
+  auth: none
+}
+
+body:json {
+  {
+    "status": "partial"
+  }
+}
+
+docs {
+  修改問題文字、狀態（open 還沒有答案、partial 有初步想法、resolved 已釐清）或個別筆記；未帶的欄位不變。
+  改筆記時必帶 base_note（開始編輯時載入的內容）。另一台裝置已修改（資料庫內容與 base 不同）回 409，不覆蓋。
+  回傳修改後的問題。查無此問題回 404。
+}

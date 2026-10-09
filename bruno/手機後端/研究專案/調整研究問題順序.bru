@@ -1,0 +1,25 @@
+meta {
+  name: 調整研究問題順序
+  type: http
+  seq: 9
+}
+
+put {
+  url: {{mobileBase}}/api/projects/{{projectId}}/questions/order
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+body:json {
+  {
+    "ids": ["{{questionId}}"]
+  }
+}
+
+docs {
+  依 ids 的順序重寫排序位置；ids 與現有問題不一致時回 409。
+}

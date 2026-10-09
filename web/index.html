@@ -28,13 +28,23 @@
       <option value="auto">自動</option>
       <option value="podcast">Podcast</option>
       <option value="article">文章</option>
+      <option disabled>──────</option>
+      <option value="paste">貼上全文…</option>
+      <option value="pdf">上傳論文…</option>
     </select>
     <input id="url" type="url" placeholder="貼上 Podcast、YouTube 或文章網址…" required>
-    <button type="submit">開始</button>
-    <button id="btn-paste" type="button" class="secondary" title="付費文章或抓不到正文時，直接貼上全文">貼上全文</button>
-    <button id="btn-pdf" type="button" class="secondary" title="上傳論文 PDF，產生摘要與心智圖">上傳論文</button>
+    <div class="start-projects">
+      <button id="btn-start-projects" type="button" class="secondary" aria-haspopup="true" aria-expanded="false"
+              title="處理完成後歸入的研究專案（選填，可多選）">專案</button>
+      <div id="start-projects-menu" class="start-projects-menu" hidden>
+        <p class="muted">處理完成後歸入（可多選）</p>
+        <div id="start-projects-list"></div>
+      </div>
+    </div>
+    <button type="submit" id="btn-start">開始</button>
     <input id="pdf-file" type="file" accept="application/pdf,.pdf" hidden>
   </form>
+  <a class="topbar-link" href="/projects">研究專案</a>
 </header>
 
 <div class="layout">
@@ -73,12 +83,6 @@
     <div class="sidebar-head">
       <h2>單集</h2>
       <input id="filter" type="search" placeholder="搜尋標題或標籤…">
-      <div class="project-filter">
-        <select id="project-filter" aria-label="依研究專案篩選">
-          <option value="">全部專案</option>
-        </select>
-        <button id="btn-manage-projects" type="button" class="secondary">管理專案</button>
-      </div>
     </div>
     <ul id="episode-list" class="episode-list"></ul>
   </aside>
@@ -199,17 +203,6 @@
   </form>
 </dialog>
 
-<dialog id="projects-dialog" class="projects-dialog">
-  <form method="dialog">
-    <h3>研究專案</h3>
-    <p class="muted">專案存在資料庫，兩台電腦共用。刪除專案只會移除歸類，不會刪除單集。</p>
-    <ul id="project-manage-list" class="project-manage-list"></ul>
-    <menu>
-      <button value="close">關閉</button>
-    </menu>
-  </form>
-</dialog>
-
 <dialog id="paste-dialog" class="paste-dialog">
   <form id="paste-form" method="dialog">
     <h3>貼上文章全文</h3>
@@ -246,6 +239,7 @@
   import { renderMindmap } from "./mindmap-render.js";
   window.renderMarkmap = renderMindmap;
 </script>
+<script src="common.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

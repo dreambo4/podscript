@@ -5,13 +5,14 @@ meta {
 }
 
 post {
-  url: {{localBase}}/api/papers?filename=paper.pdf
+  url: {{localBase}}/api/papers?filename=paper.pdf&project_ids=
   body: file
   auth: none
 }
 
 params:query {
   filename: paper.pdf
+  project_ids: 
 }
 
 body:file {
@@ -19,6 +20,7 @@ body:file {
 }
 
 docs {
+  project_ids：處理完成後歸入的研究專案，逗號分隔（選填）。
   上傳論文 PDF 並在背景產生摘要、心智圖、標籤與封面，回傳 job（kind 為 paper，stages 為 resolve、summarize）。
   request body 為 PDF 原檔本身（Content-Type: application/pdf），不是 multipart；選檔時改成本機的 PDF 路徑。
   filename：原始檔名，上傳 Storage 時記在物件的 metadata。

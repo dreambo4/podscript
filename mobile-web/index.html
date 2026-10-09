@@ -36,7 +36,7 @@
 <meta name="twitter:description" content="Podcast 逐字稿工具：分角色逐字稿、摘要、心智圖">
 <meta name="twitter:image" content="icons/og-image.png">
 
-<link rel="stylesheet" href="style.css?v=7e9c379c8d23">
+<link rel="stylesheet" href="style.css?v=f929e066d2c1">
 <script src="config.js"></script>
 </head>
 <body>
@@ -72,6 +72,23 @@
     <symbol id="ic-search" viewBox="0 0 24 24">
       <circle cx="10.5" cy="10.5" r="6.5" fill="none" stroke="currentColor" stroke-width="1.7"/>
       <path d="m20 20-4.7-4.7" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/>
+    </symbol>
+    <symbol id="ic-grip" viewBox="0 0 24 24">
+      <circle cx="9" cy="6" r="1.6" fill="currentColor"/><circle cx="15" cy="6" r="1.6" fill="currentColor"/>
+      <circle cx="9" cy="12" r="1.6" fill="currentColor"/><circle cx="15" cy="12" r="1.6" fill="currentColor"/>
+      <circle cx="9" cy="18" r="1.6" fill="currentColor"/><circle cx="15" cy="18" r="1.6" fill="currentColor"/>
+    </symbol>
+    <symbol id="ic-chevron" viewBox="0 0 24 24">
+      <path d="M9 6l6 6-6 6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+    </symbol>
+    <symbol id="ic-note" viewBox="0 0 24 24">
+      <path d="M5 4h14v16H5z M9 9h6M9 13h6M9 17h3" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+    </symbol>
+    <symbol id="ic-spark" viewBox="0 0 24 24">
+      <path d="M12 3l2 6 6 2-6 2-2 6-2-6-6-2 6-2z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>
+    </symbol>
+    <symbol id="ic-link" viewBox="0 0 24 24">
+      <path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
     </symbol>
     <symbol id="ic-mindmap" viewBox="0 0 24 24">
       <circle cx="5" cy="12" r="2.2" fill="none" stroke="currentColor" stroke-width="1.6"/>
@@ -217,6 +234,10 @@
         <form id="queue-form" class="queue-form">
           <input id="queue-url" type="url" placeholder="貼上單集網址…" required inputmode="url" autocapitalize="off" autocorrect="off" spellcheck="false" maxlength="2048">
           <input id="queue-note" type="text" placeholder="備註（選填）" maxlength="200">
+          <div id="queue-projects" class="queue-projects" hidden>
+            <span class="queue-projects-label">處理完成後歸入（可多選）</span>
+            <div id="queue-project-chips" class="project-toggles"></div>
+          </div>
           <button type="submit" class="queue-add-btn">加入</button>
         </form>
         <p id="queue-msg" class="queue-msg" hidden></p>
@@ -263,6 +284,61 @@
       <svg class="icon icon-lg"><use href="#ic-folder"/></svg>
       <p>還沒有研究專案</p>
       <p class="muted">在上方新增，再到單集頁把內容歸入專案</p>
+    </div>
+  </section>
+
+  <section id="project-view" class="view" hidden>
+    <p id="pv-loading" class="muted loading-row" hidden><span class="spinner"></span> 載入中…</p>
+    <div class="pv-card pv-head">
+      <h2 id="pv-name"></h2>
+      <p id="pv-desc" class="pv-desc"></p>
+      <p id="pv-meta" class="muted"></p>
+      <div id="pv-ai" class="pv-ai"></div>
+    </div>
+
+    <div class="pv-card">
+      <div class="pv-card-head"><h3>研究問題</h3></div>
+      <ul id="pv-questions" class="pv-qs"></ul>
+      <p id="pv-q-hint" class="muted pv-hint">按住左側握把拖曳調整順序；點問題展開筆記與缺口。</p>
+      <div id="pv-suggestions" class="pv-sugg" hidden></div>
+      <form id="pv-add-question" class="new-project pv-add-q">
+        <input id="pv-new-question" type="text" maxlength="200" placeholder="新增研究問題…" enterkeyhint="done">
+        <button type="submit">新增</button>
+      </form>
+    </div>
+
+    <div class="subtabbar pv-tabs">
+      <button class="subtab active" data-pv-tab="items" type="button">內容</button>
+      <button class="subtab" data-pv-tab="claims" type="button">對照表</button>
+      <button class="subtab" data-pv-tab="mindmap" type="button">心智圖</button>
+      <button class="subtab" data-pv-tab="notes" type="button">筆記</button>
+    </div>
+
+    <div id="pv-tab-items" class="pv-panel">
+      <label class="pv-search">
+        <svg class="icon icon-sm"><use href="#ic-search"/></svg>
+        <input id="pv-search" type="search" placeholder="只搜這個專案的全文…" enterkeyhint="search">
+      </label>
+      <div class="pv-chips" role="group" aria-label="排序">
+        <button type="button" data-pv-sort="published_at" aria-pressed="true">發布時間</button>
+        <button type="button" data-pv-sort="added_at" aria-pressed="false">歸入時間</button>
+      </div>
+      <div id="pv-kinds" class="pv-chips" role="group" aria-label="類型"></div>
+      <div id="pv-items" class="pv-items"></div>
+    </div>
+    <div id="pv-tab-claims" class="pv-panel" hidden></div>
+    <div id="pv-tab-mindmap" class="pv-panel" hidden>
+      <p id="pv-mindmap-info" class="muted"></p>
+      <div class="mindmap-wrap" id="pv-mindmap-wrap">
+        <div id="pv-mindmap"></div>
+        <button id="pv-mindmap-full" class="mindmap-full-btn" type="button">
+          <svg class="icon icon-sm"><use href="#ic-expand"/></svg>全螢幕
+        </button>
+      </div>
+    </div>
+    <div id="pv-tab-notes" class="pv-panel" hidden>
+      <div id="pv-note" class="md-box"></div>
+      <p id="pv-note-info" class="muted"></p>
     </div>
   </section>
 
@@ -460,7 +536,12 @@
   // markmap 從 CDN 載入，可能晚於詳情頁資料到達；通知 app.js 補畫。
   window.dispatchEvent(new Event("markmap-ready"));
 </script>
-<script src="app.js?v=2a4752363532"></script>
+<!-- 研究專案頁：Markdown 轉換與過濾、研究問題拖曳排序（手機不用編輯器） -->
+<script src="https://cdn.jsdelivr.net/npm/marked@18.0.13/lib/marked.umd.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/dompurify@3.4.15/dist/purify.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.7/Sortable.min.js"></script>
+<script src="app.js?v=2fda7407c37d"></script>
+<script src="project.js?v=bc9c9874cd0f"></script>
 <script src="https://accounts.google.com/gsi/client" async defer onload="initGoogleSignIn()"></script>
 </body>
 </html>

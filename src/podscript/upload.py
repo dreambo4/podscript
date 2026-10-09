@@ -566,7 +566,7 @@ def fetch_queue() -> list[dict]:
         with psycopg.connect(url, connect_timeout=CONNECT_TIMEOUT) as conn:
             with conn.cursor() as cur:
                 cur.execute(
-                    "select id, url, episode_guid, title, note, created_at"
+                    "select id, url, episode_guid, title, note, created_at, project_ids"
                     " from queue where status = 'pending' order by created_at desc"
                 )
                 rows = cur.fetchall()
@@ -581,6 +581,8 @@ def fetch_queue() -> list[dict]:
             "title": row[3],
             "note": row[4],
             "created_at": _iso(row[5]),
+            # 手機存網址時選的研究專案，本機處理完成後歸入
+            "project_ids": [str(p) for p in (row[6] or [])],
         }
         for row in rows
     ]

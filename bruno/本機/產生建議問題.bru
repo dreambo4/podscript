@@ -1,0 +1,16 @@
+meta {
+  name: 產生建議問題
+  type: http
+  seq: 38
+}
+
+post {
+  url: {{localBase}}/api/projects/{{projectId}}/suggestions
+  body: none
+  auth: none
+}
+
+docs {
+  在背景產生 3 個建議研究問題（會消耗額度），寫入 project_insights.suggestions，取代尚未處理的那批。
+  進度同 AI整理進度.bru。
+}

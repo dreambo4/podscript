@@ -172,7 +172,7 @@ async function setFavorite(guid, on) {
 }
 
 // ── 畫面切換 ──────────────────────────────────────
-const VIEWS = ["login", "list-view", "favorites-view", "tags-view", "projects-view", "detail-view"];
+const VIEWS = ["login", "list-view", "favorites-view", "tags-view", "projects-view", "project-view", "detail-view"];
 
 function showView(id) {
   VIEWS.forEach(v => {
@@ -874,6 +874,7 @@ function renderQueue() {
       <div class="queue-item-body">
         <span class="queue-item-url">${escapeHtml(item.title || item.url)}</span>
         ${item.note ? `<span class="queue-item-note">${escapeHtml(item.note)}</span>` : ""}
+        ${queueProjectNames(item).length ? `<span class="queue-item-note">完成後歸入：${queueProjectNames(item).map(escapeHtml).join("、")}</span>` : ""}
       </div>
       <button type="button" class="queue-item-del" aria-label="移除">
         <svg class="icon icon-sm"><use href="#ic-trash"/></svg>
@@ -892,6 +893,30 @@ function renderQueue() {
   });
 }
 
+function queueProjectNames(item) {
+  return (item.project_ids || []).map(id => allProjects.find(p => p.id === id)?.name).filter(Boolean);
+}
+
+// 存網址時選的研究專案（可多選），本機處理完成後歸入；送出後清空
+const queueProjects = new Set();
+
+function renderQueueProjects() {
+  const ids = new Set(allProjects.map(p => p.id));
+  [...queueProjects].forEach(id => ids.has(id) || queueProjects.delete(id));
+  document.querySelector("#queue-projects").hidden = allProjects.length === 0;
+  const box = document.querySelector("#queue-project-chips");
+  box.innerHTML = allProjects
+    .map(p => `<button type="button" class="project-toggle${queueProjects.has(p.id) ? " on" : ""}" data-id="${p.id}" aria-pressed="${queueProjects.has(p.id)}">
+      <svg class="icon icon-xs"><use href="#ic-folder"/></svg>${escapeHtml(p.name)}
+    </button>`)
+    .join("");
+  box.querySelectorAll("[data-id]").forEach(btn => btn.addEventListener("click", () => {
+    if (queueProjects.has(btn.dataset.id)) queueProjects.delete(btn.dataset.id);
+    else queueProjects.add(btn.dataset.id);
+    renderQueueProjects();
+  }));
+}
+
 async function loadQueue() {
   const section = document.querySelector("#queue-section");
   try {
@@ -908,6 +933,8 @@ async function loadQueue() {
     return;
   }
   section.hidden = false;
+  await ensureProjectsLoaded(); // 顯示與勾選專案用；抓不到時只是不顯示
+  renderQueueProjects();
   renderQueue();
 }
 
@@ -937,10 +964,12 @@ document.querySelector("#queue-form").addEventListener("submit", async (e) => {
     const item = await api("/queue", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ url, note: noteInput.value.trim() || null }),
+      body: JSON.stringify({ url, note: noteInput.value.trim() || null, project_ids: [...queueProjects] }),
     });
     urlInput.value = "";
     noteInput.value = "";
+    queueProjects.clear();
+    renderQueueProjects();
     // 重複貼同一網址時後端回傳既有那筆，這裡去重避免列表出現兩筆
     queueItems = [item, ...queueItems.filter(i => i.id !== item.id)];
     renderQueue();
@@ -1229,7 +1258,7 @@ document.querySelector("#btn-tags-entry").addEventListener("click", () => {
 });
 
 // ── 研究專案 ──────────────────────────────────────
-// 手機只瀏覽：列出專案，點進去即以該專案篩選列表；建立與歸類在本機網頁進行。
+// 列出專案，點進去是專案頁（mobile-web/project.js）；可新增、改名、刪除與歸類。
 async function loadProjectsView() {
   const loading = document.querySelector("#projects-loading");
   const list = document.querySelector("#projects-list");
@@ -1244,7 +1273,7 @@ async function loadProjectsView() {
   document.querySelector("#projects-empty").hidden = allProjects.length > 0;
   list.innerHTML = allProjects
     .map(p => `<div class="project-card">
-      <a class="project-card-link" href="#/?project=${encodeURIComponent(p.id)}">
+      <a class="project-card-link" href="#/project/${encodeURIComponent(p.id)}">
         <span class="project-card-head">
           <svg class="icon icon-sm"><use href="#ic-folder"/></svg>
           <span class="project-card-name">${escapeHtml(p.name)}</span>
@@ -1260,6 +1289,22 @@ async function loadProjectsView() {
   list.querySelectorAll(".project-card-edit").forEach(btn => {
     btn.addEventListener("click", () => openProjectSheet(btn.dataset.id));
   });
+}
+
+/**
+ * 送出期間把按鈕改成「處理中」並停用：手機後端每個請求都要連資料庫，
+ * 連續幾個請求要好幾秒，沒有回饋會以為沒反應而重按。
+ */
+async function withBusyButton(btn, label, task) {
+  const original = btn.innerHTML;
+  btn.disabled = true;
+  btn.textContent = label;
+  try {
+    return await task();
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = original;
+  }
 }
 
 /** api() 的 JSON request body 與對應的 Content-Type。 */
@@ -1280,9 +1325,11 @@ document.querySelector("#new-project-form").addEventListener("submit", async e =
   const name = input.value.trim();
   if (!name) return;
   try {
-    await createProject(name);
-    input.value = "";
-    await loadProjectsView();
+    await withBusyButton(e.target.querySelector("button[type=submit]"), "新增中…", async () => {
+      await createProject(name);
+      input.value = "";
+      await loadProjectsView();
+    });
   } catch (err) {
     alert(err.message);
   }
@@ -1352,18 +1399,22 @@ function renderEpisodeProjects(ep) {
 
   box.querySelectorAll(".project-toggle[data-id]").forEach(btn => {
     btn.addEventListener("click", () => {
+      box.querySelectorAll(".project-toggle").forEach(b => { b.disabled = true; });
+      btn.classList.add("busy");
       const ids = new Set(mine);
       if (ids.has(btn.dataset.id)) ids.delete(btn.dataset.id);
       else ids.add(btn.dataset.id);
       saveEpisodeProjects(ep, [...ids]);
     });
   });
-  box.querySelector(".project-add").addEventListener("click", async () => {
+  box.querySelector(".project-add").addEventListener("click", async e => {
     const name = (prompt("新專案名稱") || "").trim();
     if (!name) return;
     try {
-      const project = await createProject(name);
-      await saveEpisodeProjects(ep, [...mine, project.id]);
+      await withBusyButton(e.currentTarget, "新增中…", async () => {
+        const project = await createProject(name);
+        await saveEpisodeProjects(ep, [...mine, project.id]);
+      });
     } catch (err) {
       alert(err.message);
     }
@@ -1381,6 +1432,7 @@ async function saveEpisodeProjects(ep, ids) {
     if (detailEp === ep) renderEpisodeProjects(ep);
   } catch (err) {
     alert(err.message);
+    if (detailEp === ep) renderEpisodeProjects(ep); // 解除處理中的停用狀態
   }
 }
 
@@ -1681,13 +1733,14 @@ function renderMindmap() {
 let fullMindmap = null;
 const mindmapOverlay = document.querySelector("#mindmap-overlay");
 
-function openMindmapFull() {
-  if (!currentMindmapCode || typeof window.renderMarkmap !== "function") return;
+/** code 省略時為目前單集的心智圖；專案頁傳入專案心智圖。 */
+function openMindmapFull(code = currentMindmapCode) {
+  if (!code || typeof window.renderMarkmap !== "function") return;
   mindmapOverlay.hidden = false;
   document.body.classList.add("scroll-locked");
   fullMindmap?.destroy();
   // 必須在 overlay 顯示後才渲染，markmap 依容器實際尺寸 fit。
-  fullMindmap = window.renderMarkmap(currentMindmapCode, document.querySelector("#mindmap-full"),
+  fullMindmap = window.renderMarkmap(code, document.querySelector("#mindmap-full"),
     { rootColor: mindmapRootColor() });
 }
 
@@ -1799,6 +1852,7 @@ async function route() {
   const path = hash.split("?")[0];
   const params = new URLSearchParams(hash.split("?")[1] || "");
   const epMatch = path.match(/^#\/ep\/(.+)$/);
+  const projectMatch = path.match(/^#\/project\/(.+)$/);
 
   try {
     if (epMatch) {
@@ -1813,6 +1867,9 @@ async function route() {
     } else if (path === "#/tags") {
       showTags();
       await loadTagsView();
+    } else if (projectMatch) {
+      showView("project-view");
+      await loadProjectView(decodeURIComponent(projectMatch[1]));
     } else if (path === "#/projects") {
       showProjects();
       await loadProjectsView();
@@ -1852,7 +1909,8 @@ document.querySelector("#btn-logout").addEventListener("click", () => {
   route();
 });
 
-route();
+// 等 project.js（專案頁）也載入後才跑第一次路由；一般腳本都在 DOMContentLoaded 之前執行完
+document.addEventListener("DOMContentLoaded", route);
 
 // ── 下拉刷新 ──────────────────────────────────────
 // 手機端不輪詢，資料只在載入時抓一次；下拉是使用者主動更新的入口。

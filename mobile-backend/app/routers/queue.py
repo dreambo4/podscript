@@ -4,6 +4,7 @@
 節目名稱與單集標題由本機端解析後回填，因此入列時只有 url。
 """
 from urllib.parse import urlparse
+from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
@@ -27,6 +28,9 @@ STATUSES = ("pending", "done", "skipped")
 class QueueIn(BaseModel):
     url: str = Field(description="單集網址（http/https）")
     note: str | None = Field(None, description="備註，例如想聽的原因")
+    project_ids: list[UUID] = Field(
+        default_factory=list, max_length=20, description="本機處理完成後歸入的研究專案（可多個）"
+    )
 
 
 class QueueOut(BaseModel):
@@ -38,6 +42,7 @@ class QueueOut(BaseModel):
     status: str
     created_at: str | None
     processed_at: str | None
+    project_ids: list[str]
 
 
 def _row_to_item(row: tuple) -> dict:
@@ -50,10 +55,11 @@ def _row_to_item(row: tuple) -> dict:
         "status": row[5],
         "created_at": row[6].isoformat() if row[6] else None,
         "processed_at": row[7].isoformat() if row[7] else None,
+        "project_ids": [str(p) for p in (row[8] or [])],
     }
 
 
-COLUMNS = "id, url, episode_guid, title, note, status, created_at, processed_at"
+COLUMNS = "id, url, episode_guid, title, note, status, created_at, processed_at, project_ids"
 
 
 def _validate_url(url: str) -> str:
@@ -109,16 +115,20 @@ def add_to_queue(body: QueueIn, user: dict = Depends(get_current_user)) -> dict:
 
             # queue_url_pending_idx 保證同一網址只有一筆 pending；
             # 重複貼上時回傳既有那筆，讓前端當成成功而非錯誤。
+            project_ids = [str(p) for p in body.project_ids]
             cur.execute(
-                f"insert into queue (url, note, added_by) values (%s, %s, %s)"
+                f"insert into queue (url, note, added_by, project_ids) values (%s, %s, %s, %s::uuid[])"
                 f" on conflict do nothing returning {COLUMNS}",
-                (url, note, user["id"]),
+                (url, note, user["id"], project_ids),
             )
             row = cur.fetchone()
             if row is None:
+                # 重複貼上時把這次選的專案併進既有那筆，不覆蓋先前選的
                 cur.execute(
-                    f"select {COLUMNS} from queue where url = %s and status = 'pending'",
-                    (url,),
+                    "update queue set project_ids ="
+                    " array(select distinct unnest(project_ids || %s::uuid[]))"
+                    f" where url = %s and status = 'pending' returning {COLUMNS}",
+                    (project_ids, url),
                 )
                 row = cur.fetchone()
             conn.commit()

@@ -1,0 +1,21 @@
+meta {
+  name: 專案內搜尋
+  type: http
+  seq: 35
+}
+
+get {
+  url: {{localBase}}/api/projects/{{projectId}}/search
+  body: none
+  auth: none
+}
+
+params:query {
+  q: 蛋白質
+}
+
+docs {
+  在專案篇目的逐字稿或全文裡找關鍵字（不分大小寫、只比對字面，含尚未上傳的）。
+  回傳 [{guid, count, hits: [{start, snippet}]}]，依命中次數排序；每篇最多 3 個片段，
+  start 為該段秒數，文章與論文為 null。
+}

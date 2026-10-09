@@ -13,12 +13,14 @@ post {
 body:json {
   {
     "url": "https://podcasts.apple.com/tw/podcast/...",
-    "note": null
+    "note": null,
+    "project_ids": ["{{projectId}}"]
   }
 }
 
 docs {
-  201：新增成功（同網址已有 pending 時回傳既有那筆）
+  project_ids（選填，可多個）：本機處理完成後歸入的研究專案。
+  201：新增成功（同網址已有 pending 時回傳既有那筆，並把這次選的專案併入）
   409：這集已經處理過
 }
 

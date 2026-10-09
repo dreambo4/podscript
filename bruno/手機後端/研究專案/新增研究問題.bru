@@ -1,0 +1,27 @@
+meta {
+  name: 新增研究問題
+  type: http
+  seq: 8
+}
+
+post {
+  url: {{mobileBase}}/api/projects/{{projectId}}/questions
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+body:json {
+  {
+    "texts": ["高蛋白飲食對減脂期間保留肌肉有多大幫助？"],
+    "from_suggestions": false
+  }
+}
+
+docs {
+  在清單最後新增研究問題，可一次多筆（最多 20），回傳新增的問題陣列。
+  from_suggestions 為 true 時同時清空其餘建議問題。問題空白或超過 200 字回 400。
+}

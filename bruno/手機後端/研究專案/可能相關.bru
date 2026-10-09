@@ -1,0 +1,20 @@
+meta {
+  name: 可能相關
+  type: http
+  seq: 13
+}
+
+get {
+  url: {{mobileBase}}/api/projects/{{projectId}}/candidates
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+docs {
+  標籤與專案內容重疊、尚未歸入的已上傳集數，依共同標籤數排序，最多 10 筆。
+  欄位同集數列表，另加 shared_tags（共同標籤）與 project_ids（目前所屬專案，歸入時整組送回）。
+}

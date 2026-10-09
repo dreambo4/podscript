@@ -1,0 +1,26 @@
+meta {
+  name: 修改研究問題
+  type: http
+  seq: 10
+}
+
+put {
+  url: {{mobileBase}}/api/projects/{{projectId}}/questions/{{questionId}}
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+body:json {
+  {
+    "status": "partial"
+  }
+}
+
+docs {
+  修改問題文字、狀態（open／partial／resolved）或個別筆記；改筆記時必帶 base_note。另一台裝置已修改（資料庫內容與 base 不同）回 409，不覆蓋。
+  查無此問題回 404。
+}

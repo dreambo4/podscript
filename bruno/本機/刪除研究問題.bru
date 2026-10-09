@@ -1,0 +1,15 @@
+meta {
+  name: 刪除研究問題
+  type: http
+  seq: 33
+}
+
+delete {
+  url: {{localBase}}/api/projects/{{projectId}}/questions/{{questionId}}
+  body: none
+  auth: none
+}
+
+docs {
+  刪除研究問題與它的筆記。AI 整理裡這題的缺口會殘留，顯示時略過。查無此問題回 404。
+}

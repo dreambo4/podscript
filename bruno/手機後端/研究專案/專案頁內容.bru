@@ -1,0 +1,21 @@
+meta {
+  name: 專案頁內容
+  type: http
+  seq: 6
+}
+
+get {
+  url: {{mobileBase}}/api/projects/{{projectId}}
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+docs {
+  專案頁資料：名稱、說明、筆記、研究問題（依 position 排序）、AI 整理（insights，未產生為 null）、
+  已上傳篇目的 guid 與歸入時間（items）。篇目內容與專案內搜尋改用 GET /api/episodes?project=&q=。
+  查無此專案回 404；projectId 不是 UUID 回 422。
+}

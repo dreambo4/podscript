@@ -1,0 +1,22 @@
+meta {
+  name: 調整研究問題順序
+  type: http
+  seq: 31
+}
+
+put {
+  url: {{localBase}}/api/projects/{{projectId}}/questions/order
+  body: json
+  auth: none
+}
+
+body:json {
+  {
+    "ids": ["{{questionId}}"]
+  }
+}
+
+docs {
+  依 ids 的順序重寫排序位置。ids 必須與專案現有的問題完全一致，
+  另一台裝置剛新增或刪除問題時回 409，前端重新載入。
+}

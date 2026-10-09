@@ -23,7 +23,7 @@ from fastapi.responses import FileResponse, HTMLResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from . import audio, notify, pipeline, projects, storage, translate, upload
+from . import audio, notify, pipeline, project_ai, projects, storage, translate, upload
 from .resolvers import ResolveError, article, is_media_url, paper, platform_of, resolve
 from .summary import SummaryError
 
@@ -52,6 +52,8 @@ class Job:
     percent: int | None = None
     done: bool = False
     error: str = ""
+    # 開始處理時選的研究專案；處理完成才歸入，失敗不歸入（spec §6.1）
+    project_ids: list[str] = field(default_factory=list)
     started_at: str = field(
         default_factory=lambda: datetime.now(timezone.utc).isoformat()
     )
@@ -68,6 +70,7 @@ class Job:
             "percent": self.percent,
             "done": self.done,
             "error": self.error,
+            "project_ids": self.project_ids,
             "started_at": self.started_at,
             "updated_at": self.updated_at,
             "stages": [
@@ -127,6 +130,7 @@ class ProcessRequest(BaseModel):
     force: str | None = None
     num_speakers: int | None = None
     queue_id: str | None = None  # 由待處理清單觸發時帶入，供回填標題與結案
+    project_ids: list[str] = []  # 處理完成後歸入的研究專案（選填，可多個）
 
 
 class SpeakersRequest(BaseModel):
@@ -140,6 +144,27 @@ class ProjectRequest(BaseModel):
 
 class EpisodeProjectsRequest(BaseModel):
     project_ids: list[str]
+
+
+class ProjectNoteRequest(BaseModel):
+    note: str
+    base: str  # 開始編輯時載入的內容，用來偵測另一台裝置的修改
+
+
+class QuestionsRequest(BaseModel):
+    texts: list[str]
+    from_suggestions: bool = False  # 由 AI 建議勾選加入時，其餘建議一併清空
+
+
+class QuestionRequest(BaseModel):
+    text: str | None = None
+    status: Literal["open", "partial", "resolved"] | None = None
+    note: str | None = None
+    base_note: str | None = None  # 改筆記時必帶，用法同 ProjectNoteRequest.base
+
+
+class QuestionOrderRequest(BaseModel):
+    ids: list[str]
 
 
 class HashtagDecisionRequest(BaseModel):
@@ -187,7 +212,13 @@ def start_process(req: ProcessRequest) -> dict:
         running = _jobs.get(guid)
         if running and not running.done:
             return running.to_dict()
-        job = Job(guid=guid, title=episode.title, url=episode.source_url, kind=kind)
+        job = Job(
+            guid=guid,
+            title=episode.title,
+            url=episode.source_url,
+            kind=kind,
+            project_ids=req.project_ids,
+        )
         job.save()
         _jobs[guid] = job
 
@@ -201,8 +232,10 @@ MAX_PDF_BYTES = 50 * 1024 * 1024
 
 
 @app.post("/api/papers")
-async def start_paper(request: Request, filename: str = "") -> dict:
+async def start_paper(request: Request, filename: str = "", project_ids: str = "") -> dict:
     """上傳論文 PDF（request body 為 PDF 原檔）並在背景產生摘要。
+
+    project_ids 為逗號分隔的研究專案 id，處理完成後歸入。
 
     擷取全文在這裡同步完成（每篇不到一秒），抽不到文字（掃描檔）直接回 400。
     PDF 原檔先存在本機，按「上傳」時才存到 Storage，見 upload.upload。
@@ -223,7 +256,12 @@ async def start_paper(request: Request, filename: str = "") -> dict:
         running = _jobs.get(guid)
         if running and not running.done:
             return running.to_dict()
-        job = Job(guid=guid, title=parsed.episode.title, kind="paper")
+        job = Job(
+            guid=guid,
+            title=parsed.episode.title,
+            kind="paper",
+            project_ids=[p for p in project_ids.split(",") if p],
+        )
         job.save()
         _jobs[guid] = job
 
@@ -274,6 +312,12 @@ def _run(job: Job, task: Task) -> None:
         job.stage = "done"
         job.message = "完成"
         job.percent = None
+        if job.project_ids:
+            try:
+                projects.add_episode_to_projects(job.guid, job.project_ids)
+            except projects.ProjectError as exc:
+                # 處理本身已完成，歸類失敗只提示，使用者可再手動歸類
+                job.message = f"完成；歸入研究專案失敗：{exc}"
         notify.job_done(job.title, _elapsed_minutes(job))
     except Exception as exc:  # 背景執行緒需攔下所有例外，否則錯誤不會傳到前端
         job.error = str(exc) or exc.__class__.__name__
@@ -327,7 +371,13 @@ def resume_job(guid: str) -> dict:
         running = _jobs.get(guid)
         if running and not running.done:
             return running.to_dict()
-        job = Job(guid=guid, title=previous.title, url=previous.url, kind=previous.kind)
+        job = Job(
+            guid=guid,
+            title=previous.title,
+            url=previous.url,
+            kind=previous.kind,
+            project_ids=previous.project_ids,
+        )
         job.save()
         _jobs[guid] = job
 
@@ -887,6 +937,172 @@ def set_episode_projects(guid: str, req: EpisodeProjectsRequest) -> dict:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
+# ── 研究專案頁 ──────────────────────────────────────
+# 研究問題與筆記直接寫資料庫；AI 整理在背景以 claude -p 產生，前端輪詢 /ai 取得進度。
+
+_project_ai: dict[tuple[str, str], dict] = {}
+
+
+def _project_http(exc: projects.ProjectError) -> HTTPException:
+    if isinstance(exc, projects.ProjectNotFound):
+        return HTTPException(status_code=404, detail=str(exc))
+    if isinstance(exc, projects.ProjectConflict):
+        return HTTPException(status_code=409, detail=str(exc))
+    return HTTPException(status_code=400, detail=str(exc))
+
+
+def _ai_status(project_id: str) -> dict:
+    idle = {"running": False, "error": ""}
+    return {
+        kind: dict(_project_ai.get((project_id, kind), idle))
+        for kind in ("insights", "suggestions")
+    }
+
+
+@app.get("/api/projects/{project_id}")
+def get_project(project_id: str) -> dict:
+    """專案頁資料：專案、筆記、研究問題、AI 整理、產生進度與各篇的歸入時間。
+
+    篇目的標題、封面等由前端從單集清單取得，這裡只回 guid 與歸入時間。
+    """
+    try:
+        data = projects.get_project(project_id)
+    except projects.ProjectError as exc:
+        raise _project_http(exc) from exc
+    data["ai"] = _ai_status(project_id)
+    return data
+
+
+@app.put("/api/projects/{project_id}/note")
+def save_project_note(project_id: str, req: ProjectNoteRequest) -> dict:
+    """儲存專案筆記；另一台裝置已改過時回 409，不覆蓋。"""
+    try:
+        return {"note_updated_at": projects.save_note(project_id, req.note, req.base)}
+    except projects.ProjectError as exc:
+        raise _project_http(exc) from exc
+
+
+@app.post("/api/projects/{project_id}/questions")
+def add_questions(project_id: str, req: QuestionsRequest) -> list[dict]:
+    """在清單最後新增研究問題，可一次多筆（AI 建議勾選加入）。"""
+    try:
+        return projects.add_questions(project_id, req.texts, from_suggestions=req.from_suggestions)
+    except projects.ProjectError as exc:
+        raise _project_http(exc) from exc
+
+
+# 須在 /questions/{question_id} 之前註冊，否則 order 會被當成問題 id
+@app.put("/api/projects/{project_id}/questions/order")
+def reorder_questions(project_id: str, req: QuestionOrderRequest) -> dict:
+    """依傳入順序重排研究問題；清單須與現有問題一致，否則回 409。"""
+    try:
+        projects.reorder_questions(project_id, req.ids)
+    except projects.ProjectError as exc:
+        raise _project_http(exc) from exc
+    return {"ids": req.ids}
+
+
+@app.put("/api/projects/{project_id}/questions/{question_id}")
+def update_question(project_id: str, question_id: str, req: QuestionRequest) -> dict:
+    """修改研究問題的文字、狀態或筆記；改筆記時另一台裝置已改過回 409。"""
+    try:
+        return projects.update_question(
+            project_id,
+            question_id,
+            text=req.text,
+            status=req.status,
+            note=req.note,
+            base_note=req.base_note,
+        )
+    except projects.ProjectError as exc:
+        raise _project_http(exc) from exc
+
+
+@app.delete("/api/projects/{project_id}/questions/{question_id}")
+def delete_question(project_id: str, question_id: str) -> dict:
+    try:
+        projects.delete_question(project_id, question_id)
+    except projects.ProjectError as exc:
+        raise _project_http(exc) from exc
+    return {"deleted": question_id}
+
+
+@app.delete("/api/projects/{project_id}/suggestions")
+def clear_suggestions(project_id: str) -> dict:
+    """清空尚未處理的建議問題。"""
+    try:
+        projects.clear_suggestions(project_id)
+    except projects.ProjectError as exc:
+        raise _project_http(exc) from exc
+    return {"suggestions": []}
+
+
+@app.get("/api/projects/{project_id}/search")
+def search_project(project_id: str, q: str = "") -> list[dict]:
+    """在專案篇目的逐字稿或全文裡找關鍵字（含尚未上傳的）。"""
+    try:
+        guids = projects.project_guids(project_id)
+        return project_ai.search(guids, q)
+    except projects.ProjectError as exc:
+        raise _project_http(exc) from exc
+    except project_ai.ProjectAIError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+
+@app.get("/api/projects/{project_id}/ai")
+def get_project_ai(project_id: str) -> dict:
+    """AI 整理與建議問題的產生進度。"""
+    return _ai_status(project_id)
+
+
+@app.post("/api/projects/{project_id}/insights")
+def start_project_insights(project_id: str) -> dict:
+    """在背景產生對照表、心智圖與缺口（只用各篇摘要，耗一次額度）。"""
+    return _start_project_ai(project_id, "insights")
+
+
+@app.post("/api/projects/{project_id}/suggestions")
+def start_project_suggestions(project_id: str) -> dict:
+    """在背景產生 3 個建議研究問題。"""
+    return _start_project_ai(project_id, "suggestions")
+
+
+def _start_project_ai(project_id: str, kind: str) -> dict:
+    try:
+        projects.get_project(project_id)  # 查無此專案時立即回 404，不進背景
+    except projects.ProjectError as exc:
+        raise _project_http(exc) from exc
+    with _lock:
+        status = _project_ai.get((project_id, kind))
+        if status and status["running"]:
+            return _ai_status(project_id)
+        _project_ai[(project_id, kind)] = {"running": True, "error": ""}
+    thread = threading.Thread(target=_run_project_ai, args=(project_id, kind), daemon=True)
+    thread.start()
+    return _ai_status(project_id)
+
+
+def _run_project_ai(project_id: str, kind: str) -> None:
+    """背景產生並寫入資料庫；錯誤留給前端顯示。"""
+    status = _project_ai[(project_id, kind)]
+    try:
+        project = projects.get_project(project_id)
+        sources, _skipped = project_ai.collect_sources(projects.project_guids(project_id))
+        if kind == "insights":
+            generated = project_ai.generate_insights(project, sources)
+            projects.save_insights(project_id, **generated)
+        else:
+            suggestions, provenance = project_ai.generate_suggestions(project, sources)
+            projects.save_suggestions(project_id, suggestions, provenance)
+    except (project_ai.ProjectAIError, projects.ProjectError) as exc:
+        status["error"] = str(exc)
+    except Exception as exc:  # 背景執行緒需攔下所有例外，否則錯誤不會傳到前端
+        status["error"] = str(exc) or exc.__class__.__name__
+        traceback.print_exc()
+    finally:
+        status["running"] = False
+
+
 @app.get("/api/episodes/{guid}/pdf")
 def get_paper_pdf(guid: str) -> Response:
     """論文的 PDF 原檔：本機尚未上傳的讀本機檔案，已上傳的從 Storage 取得。"""
@@ -913,13 +1129,30 @@ def _episode_dir(guid: str) -> Path:
 
 @app.get("/")
 def index() -> HTMLResponse:
-    """首頁。css/js 以檔案修改時間戳記，改版後瀏覽器必定重新抓取。
+    """首頁（單集清單與單集內容）。"""
+    return _stamped_page("index.html")
+
+
+@app.get("/project")
+def project_page() -> HTMLResponse:
+    """研究專案頁，獨立於單集清單；網址為 /project#<專案 id>。"""
+    return _stamped_page("project.html")
+
+
+@app.get("/projects")
+def project_manage_page() -> HTMLResponse:
+    """專案管理頁：專案資料夾一格一格排列，從右側清單把單集拖進去歸類。"""
+    return _stamped_page("project-manage.html")
+
+
+def _stamped_page(filename: str) -> HTMLResponse:
+    """css/js 以檔案修改時間戳記，改版後瀏覽器必定重新抓取。
 
     手動維護 ?v=N 容易忘記更新，導致改了樣式卻看到舊畫面；
     改由伺服器在回應時填入 mtime，存檔即換網址。
     """
-    html = (STATIC_DIR / "index.html").read_text(encoding="utf-8")
-    for name in ("style.css", "app.js"):
+    html = (STATIC_DIR / filename).read_text(encoding="utf-8")
+    for name in ("style.css", "common.js", "app.js", "project.js", "project-manage.js"):
         stamp = int((STATIC_DIR / name).stat().st_mtime)
         html = html.replace(f'"{name}"', f'"{name}?v={stamp}"')
     return HTMLResponse(html)

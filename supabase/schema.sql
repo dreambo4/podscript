@@ -147,3 +147,50 @@ create index if not exists project_items_guid_idx on project_items (episode_guid
 
 alter table projects enable row level security;
 alter table project_items enable row level security;
+
+-- ────────────────────────────────────────────────
+-- 研究專案頁（2026-10-09）：專案筆記、研究問題、AI 整理結果
+-- spec：.claude/specs/specs_20261009_研究專案頁面.md §8
+-- 研究問題與筆記本機、手機都能編輯；AI 整理只由本機 claude -p 產生，手機只讀。
+-- 存筆記時比對「開始編輯時的內容」，另一台裝置改過就拒絕，避免互相覆蓋。
+-- ────────────────────────────────────────────────
+
+-- 1. 專案筆記
+alter table projects add column if not exists note text not null default ''
+  check (length(note) <= 50000);
+alter table projects add column if not exists note_updated_at timestamptz;
+
+-- 2. 研究問題
+create table if not exists project_questions (
+  id          uuid primary key default gen_random_uuid(),
+  project_id  uuid not null references projects (id) on delete cascade,
+  text        text not null check (text <> '' and length(text) <= 200),
+  status      text not null default 'open'
+              check (status in ('open', 'partial', 'resolved')),  -- 還沒有答案／有初步想法／已釐清
+  position    int  not null default 0,                           -- 手動排序，小的在前
+  note        text not null default '' check (length(note) <= 20000),
+  created_at  timestamptz not null default now(),
+  updated_at  timestamptz not null default now()
+);
+create index if not exists project_questions_project_idx
+  on project_questions (project_id, position);
+
+-- 3. AI 整理結果（本機 claude -p 產生，手機只讀）；重新產生時整列覆蓋
+create table if not exists project_insights (
+  project_id      uuid primary key references projects (id) on delete cascade,
+  claims          jsonb,          -- 主張對照表 {"sources": [...], "rows": [{"claim", "marks": {guid: "agree"|"differ"}, "note"}]}
+  mindmap         text,           -- Mermaid mindmap 語法，沿用單集的心智圖渲染
+  gaps            jsonb,          -- {"<question_id>": {"covered": [guid...], "missing": ["..."]}}
+  source_guids    text[] not null default '{}',  -- 產生時用到的篇目，用來提示「有新篇目未納入」
+  generated_at    timestamptz,
+  suggestions     jsonb not null default '[]'::jsonb,  -- 建議問題 [{"text": "...", "why": "..."}]
+  suggested_at    timestamptz,
+  provenance      jsonb not null default '{}'::jsonb   -- 模型與版本
+);
+
+alter table project_questions enable row level security;
+alter table project_insights enable row level security;
+
+-- 手機待處理：存網址時選的研究專案（可多選），本機處理完成後歸入（2026-10-09）
+-- 不設外鍵：陣列無法設外鍵；專案已刪除時，歸入時略過
+alter table queue add column if not exists project_ids uuid[] not null default '{}';

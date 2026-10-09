@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>研究專案 · podscript</title>
+<link rel="icon" type="image/svg+xml" href="favicon.svg">
+<link rel="stylesheet" href="style.css">
+</head>
+<body class="manage-body">
+
+<header class="topbar">
+  <h1 class="brand">
+    <a href="/">
+      <svg class="brand-mark" viewBox="0 0 32 32" aria-hidden="true">
+        <rect width="32" height="32" rx="8" fill="#F8FAFC"/>
+        <path d="M 16 3 L 27 9.5 L 27 22.5 L 16 29 L 5 22.5 L 5 9.5 Z" fill="#0F172A"/>
+        <path d="M 11 12 V 20" fill="none" stroke="#06B6D4" stroke-width="3.5" stroke-linecap="round"/>
+        <path d="M 16 8 V 24" fill="none" stroke="#3B82F6" stroke-width="3.5" stroke-linecap="round"/>
+        <path d="M 21 12 V 20" fill="none" stroke="#EC4899" stroke-width="3.5" stroke-linecap="round"/>
+      </svg>
+      <span class="brand-name">podscript</span>
+    </a>
+  </h1>
+  <a class="pp-back" href="/">← 單集清單</a>
+</header>
+
+<svg width="0" height="0" style="position:absolute;overflow:hidden;" aria-hidden="true">
+  <defs>
+      <symbol id="ic-audio" viewBox="0 0 24 24">
+        <path d="M4.5 15v-2.5a7.5 7.5 0 0 1 15 0V15" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+        <path d="M4.5 14.5h2a1.2 1.2 0 0 1 1.2 1.2v3.1a1.2 1.2 0 0 1-1.2 1.2h-.8a1.2 1.2 0 0 1-1.2-1.2zM19.5 14.5h-2a1.2 1.2 0 0 0-1.2 1.2v3.1a1.2 1.2 0 0 0 1.2 1.2h.8a1.2 1.2 0 0 0 1.2-1.2z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>
+      </symbol>
+      <symbol id="ic-video" viewBox="0 0 24 24">
+        <rect x="3.5" y="5.5" width="17" height="13" rx="3" fill="none" stroke="currentColor" stroke-width="1.6"/>
+        <path d="M10.3 9.4v5.2l4.4-2.6z" fill="currentColor" stroke="currentColor" stroke-width="1" stroke-linejoin="round"/>
+      </symbol>
+      <symbol id="ic-paper" viewBox="0 0 24 24">
+        <path d="M14 3.5H7a1.5 1.5 0 0 0-1.5 1.5v14A1.5 1.5 0 0 0 7 20.5h10a1.5 1.5 0 0 0 1.5-1.5V8z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>
+        <path d="M14 3.5V8h4.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>
+        <path d="M8.5 12h7M8.5 15h7M8.5 18h4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+      </symbol>
+      <symbol id="ic-article" viewBox="0 0 24 24">
+        <path d="M16.5 19H5a1.5 1.5 0 0 1-1.5-1.5V5.5a1 1 0 0 1 1-1h11a1 1 0 0 1 1 1V17.5a1.5 1.5 0 0 0 3 0V9h-3" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>
+        <path d="M7 8.5h6M7 12h6M7 15.5h4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+      </symbol>
+      <symbol id="ic-folder" viewBox="0 0 24 24">
+        <path d="M3.5 7.5a2 2 0 0 1 2-2h4l2 2.5h7a2 2 0 0 1 2 2v7.5a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>
+      </symbol>
+      <symbol id="ic-check" viewBox="0 0 24 24">
+        <path d="M5 12.5l4.5 4.5L19 7.5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+      </symbol>
+      <symbol id="ic-search" viewBox="0 0 24 24">
+        <circle cx="11" cy="11" r="7" fill="none" stroke="currentColor" stroke-width="2"/>
+        <path d="M20 20l-3.5-3.5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+      </symbol>
+  </defs>
+</svg>
+
+<div class="pm-layout">
+  <aside class="pm-side">
+    <div class="pm-side-head">
+      <h2>單集</h2>
+      <label class="pp-search">
+        <svg class="icon-sm"><use href="#ic-search"/></svg>
+        <input id="pm-search" type="search" placeholder="搜尋標題或標籤…">
+      </label>
+      <div class="pp-chips" role="group" aria-label="篩選">
+        <button type="button" data-filter="all" aria-pressed="true">全部</button>
+        <button type="button" data-filter="unfiled" aria-pressed="false">未歸類</button>
+      </div>
+    </div>
+    <ul id="pm-episodes" class="episode-list pm-episodes"></ul>
+  </aside>
+
+  <main class="pm-main">
+    <div class="pm-head">
+      <h2>研究專案</h2>
+      <p id="pm-selected-hint" class="muted"></p>
+    </div>
+    <div id="pm-folders" class="pm-folders" aria-live="polite"></div>
+  </main>
+</div>
+
+<div id="pm-toast" class="pm-toast" role="status" hidden></div>
+
+<script src="common.js"></script>
+<script src="project-manage.js"></script>
+</body>
+</html>

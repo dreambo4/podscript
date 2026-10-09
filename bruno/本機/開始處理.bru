@@ -18,7 +18,8 @@ body:json {
     "title": null,
     "force": null,
     "num_speakers": null,
-    "queue_id": null
+    "queue_id": null,
+    "project_ids": []
   }
 }
 
@@ -30,6 +31,8 @@ docs {
   回應的 kind 為 podcast／article；文章的 stages 只有 resolve、summarize。
   force：從哪個階段起重跑（download／transcribe／diarize／summarize），之後階段一併重跑。
   queue_id：由待處理清單觸發時帶入，供回填標題與結案。
+  project_ids：處理完成後歸入的研究專案（選填，可多個）；處理失敗不歸入，已刪除的專案略過。
+  記在 job.json，接續中斷的處理時沿用。
 }
 
 script:post-response {

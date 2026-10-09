@@ -1,14 +1,3 @@
-const STAGE_LABELS = {
-  resolve: "解析",
-  download: "下載",
-  transcribe: "轉錄",
-  diarize: "分離",
-  merge: "對齊",
-  summarize: "摘要",
-  done: "完成",
-};
-
-const $ = (id) => document.getElementById(id);
 let current = null;
 let audioEl = null;
 
@@ -22,11 +11,12 @@ $("start-form").addEventListener("submit", async (e) => {
   const url = $("url").value.trim();
   if (!url) return;
 
-  const btn = e.target.querySelector("button[type=submit]");
+  const btn = $("btn-start");
   btn.disabled = true;
   try {
-    await startJob({ url, kind: $("kind").value });
+    await startJob({ url, kind: $("kind").value, project_ids: [...startProjects] });
     $("url").value = "";
+    clearStartProjects();
   } catch (err) {
     alert(err.message);
   } finally {
@@ -41,9 +31,20 @@ async function startJob(body) {
   await loadLibrary();
 }
 
-// 付費文章或抓不到正文時，直接貼上全文。
-$("btn-paste").addEventListener("click", () => $("paste-dialog").showModal());
+// 下拉選單的「貼上全文」「上傳論文」選了就立刻開啟，之後跳回原本的類型
+let lastKind = $("kind").value;
+$("kind").addEventListener("change", () => {
+  const value = $("kind").value;
+  if (value === "paste" || value === "pdf") {
+    $("kind").value = lastKind;
+    if (value === "paste") $("paste-dialog").showModal();
+    else $("pdf-file").click();
+    return;
+  }
+  lastKind = value;
+});
 
+// 付費文章或抓不到正文時，直接貼上全文。
 $("paste-form").addEventListener("submit", async (e) => {
   if (e.submitter?.value !== "ok") return;
   e.preventDefault();
@@ -53,10 +54,11 @@ $("paste-form").addEventListener("submit", async (e) => {
   const btn = $("btn-paste-submit");
   btn.disabled = true;
   try {
-    await startJob({ text, title: $("paste-title").value.trim() });
+    await startJob({ text, title: $("paste-title").value.trim(), project_ids: [...startProjects] });
     $("paste-dialog").close();
     $("paste-title").value = "";
     $("paste-text").value = "";
+    clearStartProjects();
   } catch (err) {
     alert(err.message);
   } finally {
@@ -65,18 +67,17 @@ $("paste-form").addEventListener("submit", async (e) => {
 });
 
 // 論文：選 PDF 檔後直接上傳，全文擷取與摘要在本機進行。
-$("btn-pdf").addEventListener("click", () => $("pdf-file").click());
-
 $("pdf-file").addEventListener("change", async (e) => {
   const file = e.target.files[0];
   e.target.value = ""; // 同一個檔案再選一次也要觸發
   if (!file) return;
 
-  const btn = $("btn-pdf");
+  const btn = $("btn-start");
   btn.disabled = true;
   btn.textContent = "上傳中…";
   try {
-    const res = await fetch(`/api/papers?filename=${encodeURIComponent(file.name)}`, {
+    const query = new URLSearchParams({ filename: file.name, project_ids: [...startProjects].join(",") });
+    const res = await fetch(`/api/papers?${query}`, {
       method: "POST",
       headers: { "Content-Type": "application/pdf" },
       body: file,
@@ -86,14 +87,60 @@ $("pdf-file").addEventListener("change", async (e) => {
       throw new Error(detail.detail || `上傳失敗（${res.status}）`);
     }
     const job = await res.json();
+    clearStartProjects();
     location.hash = job.guid;
     await loadLibrary();
   } catch (err) {
     alert(err.message);
   } finally {
     btn.disabled = false;
-    btn.textContent = "上傳論文";
+    btn.textContent = "開始";
   }
+});
+
+// 處理完成後要歸入的研究專案（可多選）；貼網址、貼上全文、上傳論文共用，送出後清空
+const startProjects = new Set();
+
+function renderStartProjects() {
+  const ids = new Set(allProjects.map((p) => p.id));
+  [...startProjects].forEach((id) => ids.has(id) || startProjects.delete(id)); // 已刪除的專案
+  $("btn-start-projects").textContent = startProjects.size ? `專案 ${startProjects.size}` : "專案";
+  $("btn-start-projects").classList.toggle("on", startProjects.size > 0);
+  $("start-projects-list").innerHTML = allProjects.length
+    ? allProjects
+        .map(
+          (p) => `<label><input type="checkbox" value="${p.id}" ${startProjects.has(p.id) ? "checked" : ""}>
+            ${escapeHtml(p.name)}</label>`
+        )
+        .join("")
+    : `<p class="muted">還沒有研究專案，可到頁首「研究專案」新增</p>`;
+  $("start-projects-list").querySelectorAll("input").forEach((box) =>
+    box.addEventListener("change", () => {
+      if (box.checked) startProjects.add(box.value);
+      else startProjects.delete(box.value);
+      renderStartProjects();
+    })
+  );
+}
+
+function clearStartProjects() {
+  startProjects.clear();
+  renderStartProjects();
+}
+
+function setStartProjectsOpen(open) {
+  $("start-projects-menu").hidden = !open;
+  $("btn-start-projects").setAttribute("aria-expanded", open);
+}
+
+$("btn-start-projects").addEventListener("click", () =>
+  setStartProjectsOpen($("start-projects-menu").hidden)
+);
+document.addEventListener("click", (e) => {
+  if (!e.target.closest(".start-projects")) setStartProjectsOpen(false);
+});
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape") setStartProjectsOpen(false);
 });
 
 function showProgress(job) {
@@ -262,9 +309,6 @@ async function showEpisode(guid) {
   window.scrollTo({ top: 0, behavior: "smooth" });
 }
 
-// 未寫的屬性沿用這組預設（線條插圖風格），被過濾掉屬性的元素才不會變成黑色實心
-const COVER_SVG_DEFAULTS = 'viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"';
-
 /** 摘要中的封面；svg 已由後端以白名單過濾（見 cover.py）。 */
 function renderCover(cover) {
   const el = $("cover");
@@ -369,46 +413,14 @@ function renderMindmap(code) {
   }
 }
 
-// ── 心智圖全螢幕 ──────────────────────────────────
-let fullMindmap = null;
-
-function openMindmapFull() {
-  const code = current?.summary?.mindmap;
-  if (!code || typeof window.renderMarkmap !== "function") return;
-  $("mindmap-overlay").hidden = false;
-  document.body.classList.add("scroll-locked");
-  fullMindmap?.destroy();
-  // 必須在 overlay 顯示後才渲染，markmap 依容器實際尺寸 fit。
-  try {
-    fullMindmap = window.renderMarkmap(code, $("mindmap-full"));
-  } catch (err) {
-    closeMindmapFull();
-  }
-}
-
-function closeMindmapFull() {
-  if ($("mindmap-overlay").hidden) return;
-  $("mindmap-overlay").hidden = true;
-  document.body.classList.remove("scroll-locked");
-  fullMindmap?.destroy();
-  fullMindmap = null;
-  $("mindmap-full").innerHTML = "";
-}
-
 $("btn-mindmap-full").addEventListener("click", (e) => {
   e.stopPropagation();
-  openMindmapFull();
+  openMindmapFull(current?.summary?.mindmap);
 });
 // 點縮圖任一處也進全螢幕；點節點的圓點仍是展開/收合。
 $("mindmap").addEventListener("click", (e) => {
-  if (!e.target.closest("circle")) openMindmapFull();
+  if (!e.target.closest("circle")) openMindmapFull(current?.summary?.mindmap);
 });
-$("btn-mindmap-close").addEventListener("click", closeMindmapFull);
-$("btn-mindmap-reset").addEventListener("click", () => fullMindmap?.fit());
-document.addEventListener("keydown", (e) => {
-  if (e.key === "Escape") closeMindmapFull();
-});
-window.addEventListener("resize", () => fullMindmap?.fit());
 
 function renderSpeakers(data) {
   const ids = [...new Set(data.segments.map((s) => s.speaker))].sort();
@@ -1022,6 +1034,7 @@ function renderQueue() {
       <div class="queue-item-body">
         <span class="queue-item-title">${escapeHtml(item.title || item.url)}</span>
         ${item.note ? `<span class="queue-item-note">${escapeHtml(item.note)}</span>` : ""}
+        ${queueProjectsHtml(item)}
         ${processing ? `<span class="queue-item-status">處理中…${escapeHtml(episode.message || "")}</span>` : ""}
         ${failed ? `<span class="queue-item-status failed">處理失敗，可再試一次</span>` : ""}
         ${done ? `<span class="queue-item-status">已處理完成，待上傳</span>` : ""}
@@ -1046,9 +1059,10 @@ function renderQueue() {
       buttons.forEach((b) => (b.disabled = true));
       try {
         // 帶 queue_id 讓後端回填解析出的標題；結案在上傳成功時才做。
+        // 手機存網址時選的專案一併帶入，處理完成後歸入。
         const job = await api("/api/process", {
           method: "POST",
-          body: { url: item.url, queue_id: item.id },
+          body: { url: item.url, queue_id: item.id, project_ids: item.project_ids || [] },
         });
         location.hash = job.guid;
         await Promise.all([loadLibrary(), loadQueue()]);
@@ -1072,6 +1086,14 @@ function renderQueue() {
   });
 }
 
+/** 待處理項目在手機上選的研究專案；已刪除的專案不顯示。 */
+function queueProjectsHtml(item) {
+  const names = (item.project_ids || [])
+    .map((id) => allProjects.find((p) => p.id === id)?.name)
+    .filter(Boolean);
+  return names.length ? `<span class="queue-item-note">完成後歸入：${names.map(escapeHtml).join("、")}</span>` : "";
+}
+
 async function loadLibrary() {
   allEpisodes = await api("/api/episodes");
   renderLibrary();
@@ -1088,10 +1110,8 @@ async function loadLibrary() {
 
 function renderLibrary() {
   const keyword = $("filter").value.trim().toLowerCase();
-  const project = $("project-filter").value;
   const shown = allEpisodes.filter(
     (e) =>
-      (!project || (e.projects || []).includes(project)) &&
       (!keyword ||
         [e.title, e.podcast_name, ...(e.hashtags || [])]
           .join(" ")
@@ -1118,7 +1138,7 @@ function renderLibrary() {
     .join("");
 
   $("episode-list").innerHTML =
-    html || `<li class="muted">${keyword || project ? "沒有符合的單集" : "還沒有處理過的單集"}</li>`;
+    html || `<li class="muted">${keyword ? "沒有符合的單集" : "還沒有處理過的單集"}</li>`;
 
   $("episode-list").querySelectorAll("li[data-guid]").forEach((li) => {
     li.addEventListener("click", () => {
@@ -1129,8 +1149,6 @@ function renderLibrary() {
 }
 
 $("filter").addEventListener("input", renderLibrary);
-$("project-filter").addEventListener("change", renderLibrary);
-
 // ── 研究專案 ────────────────────────────────────────
 // 專案存在資料庫，兩台電腦共用；未上傳的單集也能歸類。
 
@@ -1144,20 +1162,8 @@ async function loadProjects() {
     console.error(err);
     allProjects = [];
   }
-  renderProjectFilter();
+  renderStartProjects();
   if (current) renderEpisodeProjects();
-}
-
-function renderProjectFilter() {
-  const select = $("project-filter");
-  const selected = select.value;
-  select.innerHTML =
-    `<option value="">全部專案</option>` +
-    allProjects
-      .map((p) => `<option value="${p.id}">${escapeHtml(p.name)}（${p.item_count}）</option>`)
-      .join("");
-  // 篩選中的專案被刪除時回到全部
-  select.value = allProjects.some((p) => p.id === selected) ? selected : "";
 }
 
 /** 單集頁的專案區塊：已歸入的標為選取，點一下切換。 */
@@ -1210,57 +1216,6 @@ $("new-project-form").addEventListener("submit", async (e) => {
   }
 });
 
-$("btn-manage-projects").addEventListener("click", async () => {
-  await loadProjects();
-  renderProjectManager();
-  $("projects-dialog").showModal();
-});
-
-/** 管理對話框：改名、說明與刪除；新增在單集頁進行（建立時就歸入該集）。 */
-function renderProjectManager() {
-  const list = $("project-manage-list");
-  list.innerHTML = allProjects.length
-    ? allProjects
-        .map(
-          (p) => `<li data-id="${p.id}">
-            <input type="text" name="name" value="${escapeHtml(p.name)}" maxlength="100" aria-label="專案名稱">
-            <button type="button" class="danger" data-action="delete">刪除</button>
-            <textarea name="description" rows="2" maxlength="2000" placeholder="說明（選填）">${escapeHtml(p.description)}</textarea>
-            <span class="count">${p.item_count} 筆內容</span>
-          </li>`
-        )
-        .join("")
-    : `<li class="muted">還沒有專案；在單集頁的「研究專案」區塊新增</li>`;
-
-  list.querySelectorAll("li[data-id]").forEach((li) => {
-    const id = li.dataset.id;
-    li.querySelectorAll("input, textarea").forEach((field) => {
-      field.addEventListener("change", async () => {
-        try {
-          await api(`/api/projects/${id}`, { method: "PUT", body: { [field.name]: field.value } });
-          await loadProjects();
-        } catch (err) {
-          alert(err.message);
-          renderProjectManager();
-        }
-      });
-    });
-    li.querySelector("[data-action=delete]").addEventListener("click", async () => {
-      const name = allProjects.find((p) => p.id === id)?.name || "";
-      if (!confirm(`刪除專案「${name}」？\n只會移除歸類，單集不受影響。`)) return;
-      try {
-        await api(`/api/projects/${id}`, { method: "DELETE" });
-        await Promise.all([loadProjects(), loadLibrary()]);
-        if (current) current.projects = (current.projects || []).filter((p) => p !== id);
-        renderProjectManager();
-        if (current) renderEpisodeProjects();
-      } catch (err) {
-        alert(err.message);
-      }
-    });
-  });
-}
-
 // ── 側邊欄（窄螢幕） ────────────────────────────────
 
 // 寬螢幕：清單常駐左側，可收合讓內容撐滿；窄螢幕：清單是抽屜，☰ 開關
@@ -1296,96 +1251,14 @@ function closeSidebar() {
   $("sidebar").classList.remove("open");
 }
 
-// 內容類型：YouTube 為影片、文章與論文各自一類，其餘平台為音檔（與手機卡片相同）
-const EP_KINDS = {
-  audio: { icon: "ic-audio", label: "音檔" },
-  video: { icon: "ic-video", label: "影片" },
-  article: { icon: "ic-article", label: "文章" },
-  paper: { icon: "ic-paper", label: "論文" },
-};
-
-function episodeKind(e) {
-  if (e.kind === "article" || e.kind === "paper") return e.kind;
-  return e.platform === "youtube" ? "video" : "audio";
-}
-
-/** 清單卡片左側封面；svg 已由後端過濾。沒有封面時顯示灰色類型 icon。 */
-function listCoverHtml(e) {
-  if (!e.cover?.svg) {
-    return `<div class="ep-cover ep-cover-empty"><svg class="kind-icon"><use href="#${EP_KINDS[episodeKind(e)].icon}"/></svg></div>`;
-  }
-  return `<div class="ep-cover" style="--cover-color:${escapeHtml(e.cover.color)}"><svg ${COVER_SVG_DEFAULTS} aria-hidden="true">${e.cover.svg}</svg></div>`;
-}
-
-function episodeRow(e, selected) {
-  const { icon, label } = EP_KINDS[episodeKind(e)];
-  const meta = [
-    escapeHtml(e.podcast_name),
-    (e.published_at || "").slice(0, 10),
-    e.duration_sec ? `${Math.round(e.duration_sec / 60)} 分鐘` : "",
-  ]
-    .filter(Boolean)
-    // 每段不斷行，窄欄換行時只在「·」之間換，不會把「61 分鐘」拆開
-    .map((part) => `<span class="nowrap">${part}</span>`)
-    .join(" · ");
-
-  // 處理進度與待辦提示另起一行，與手機卡片的版面一致
-  const status = e.processing
-    ? `<span class="ep-status"><span class="spinner"></span> ${escapeHtml(
-        STAGE_LABELS[e.stage] || e.stage
-      )}中${e.percent != null ? ` ${e.percent}%` : "…"}</span>`
-    : e.error
-      ? `<span class="ep-status ep-error">未完成，點擊繼續</span>`
-      : !e.has_summary
-        ? `<span class="ep-status muted">未生成摘要</span>`
-        : "";
-
-  const tags = (e.hashtags || []).map((t) => `<span>#${escapeHtml(t)}</span>`).join("");
-  return `<li data-guid="${e.guid}" class="ep-card${selected ? " selected" : ""}">
-    ${listCoverHtml(e)}
-    <div class="ep-body">
-      <span class="ep-name">${escapeHtml(e.title)}</span>
-      ${e.title_translated ? `<span class="ep-name-zh">${escapeHtml(e.title_translated)}</span>` : ""}
-      ${meta ? `<span class="ep-meta"><svg class="kind-icon" role="img" aria-label="${label}"><use href="#${icon}"/></svg>${meta}</span>` : ""}
-      ${status}
-      ${tags ? `<span class="ep-tags">${tags}</span>` : ""}
-    </div>
-  </li>`;
-}
-
-// ── 工具 ────────────────────────────────────────────
-
-async function api(path, { method = "GET", body } = {}) {
-  const res = await fetch(path, {
-    method,
-    headers: body ? { "Content-Type": "application/json" } : {},
-    body: body ? JSON.stringify(body) : undefined,
-  });
-  if (!res.ok) {
-    const detail = await res.json().catch(() => ({}));
-    throw new Error(detail.detail || `請求失敗（${res.status}）`);
-  }
-  return res.json();
-}
-
-function formatTime(seconds) {
-  const total = Math.floor(seconds);
-  const h = Math.floor(total / 3600);
-  const m = Math.floor((total % 3600) / 60);
-  const s = total % 60;
-  const pad = (n) => String(n).padStart(2, "0");
-  return h ? `${pad(h)}:${pad(m)}:${pad(s)}` : `${pad(m)}:${pad(s)}`;
-}
-
-function escapeHtml(text) {
-  const div = document.createElement("div");
-  div.textContent = text ?? "";
-  return div.innerHTML;
-}
-
 /** 網址是唯一的狀態來源：#guid 決定顯示哪一集，重新整理後不變。 */
 async function openFromHash() {
   const guid = location.hash.slice(1);
+  // 研究專案頁是獨立頁面；舊的 #project/<id> 網址轉過去
+  if (guid.startsWith("project/")) {
+    location.replace(`/project#${guid.slice("project/".length)}`);
+    return;
+  }
   renderLibrary(); // 更新選中高亮
 
   if (!guid) {

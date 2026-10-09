@@ -1,0 +1,188 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>研究專案 · podscript</title>
+<link rel="icon" type="image/svg+xml" href="favicon.svg">
+<link rel="stylesheet" href="style.css">
+</head>
+<body class="project-body">
+
+<header class="topbar">
+  <h1 class="brand">
+    <a href="/">
+      <svg class="brand-mark" viewBox="0 0 32 32" aria-hidden="true">
+        <rect width="32" height="32" rx="8" fill="#F8FAFC"/>
+        <path d="M 16 3 L 27 9.5 L 27 22.5 L 16 29 L 5 22.5 L 5 9.5 Z" fill="#0F172A"/>
+        <path d="M 11 12 V 20" fill="none" stroke="#06B6D4" stroke-width="3.5" stroke-linecap="round"/>
+        <path d="M 16 8 V 24" fill="none" stroke="#3B82F6" stroke-width="3.5" stroke-linecap="round"/>
+        <path d="M 21 12 V 20" fill="none" stroke="#EC4899" stroke-width="3.5" stroke-linecap="round"/>
+      </svg>
+      <span class="brand-name">podscript</span>
+    </a>
+  </h1>
+  <a class="pp-back" href="/projects">← 研究專案</a>
+  <span class="pp-grow"></span>
+  <label class="pp-switch">
+    <span>研究專案</span>
+    <select id="pp-project-select" aria-label="切換研究專案"></select>
+  </label>
+</header>
+
+<svg width="0" height="0" style="position:absolute;overflow:hidden;" aria-hidden="true">
+  <defs>
+      <symbol id="ic-audio" viewBox="0 0 24 24">
+        <path d="M4.5 15v-2.5a7.5 7.5 0 0 1 15 0V15" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+        <path d="M4.5 14.5h2a1.2 1.2 0 0 1 1.2 1.2v3.1a1.2 1.2 0 0 1-1.2 1.2h-.8a1.2 1.2 0 0 1-1.2-1.2zM19.5 14.5h-2a1.2 1.2 0 0 0-1.2 1.2v3.1a1.2 1.2 0 0 0 1.2 1.2h.8a1.2 1.2 0 0 0 1.2-1.2z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>
+      </symbol>
+      <symbol id="ic-video" viewBox="0 0 24 24">
+        <rect x="3.5" y="5.5" width="17" height="13" rx="3" fill="none" stroke="currentColor" stroke-width="1.6"/>
+        <path d="M10.3 9.4v5.2l4.4-2.6z" fill="currentColor" stroke="currentColor" stroke-width="1" stroke-linejoin="round"/>
+      </symbol>
+      <symbol id="ic-paper" viewBox="0 0 24 24">
+        <path d="M14 3.5H7a1.5 1.5 0 0 0-1.5 1.5v14A1.5 1.5 0 0 0 7 20.5h10a1.5 1.5 0 0 0 1.5-1.5V8z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>
+        <path d="M14 3.5V8h4.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>
+        <path d="M8.5 12h7M8.5 15h7M8.5 18h4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+      </symbol>
+      <symbol id="ic-article" viewBox="0 0 24 24">
+        <path d="M16.5 19H5a1.5 1.5 0 0 1-1.5-1.5V5.5a1 1 0 0 1 1-1h11a1 1 0 0 1 1 1V17.5a1.5 1.5 0 0 0 3 0V9h-3" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>
+        <path d="M7 8.5h6M7 12h6M7 15.5h4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+      </symbol>
+      <symbol id="ic-grip" viewBox="0 0 24 24">
+        <circle cx="9" cy="6" r="1.6"/><circle cx="15" cy="6" r="1.6"/><circle cx="9" cy="12" r="1.6"/>
+        <circle cx="15" cy="12" r="1.6"/><circle cx="9" cy="18" r="1.6"/><circle cx="15" cy="18" r="1.6"/>
+      </symbol>
+      <symbol id="ic-chevron" viewBox="0 0 24 24">
+        <path d="M9 6l6 6-6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+      </symbol>
+      <symbol id="ic-note" viewBox="0 0 24 24">
+        <path d="M5 4h14v16H5z M9 9h6M9 13h6M9 17h3" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+      </symbol>
+      <symbol id="ic-spark" viewBox="0 0 24 24">
+        <path d="M12 3l2 6 6 2-6 2-2 6-2-6-6-2 6-2z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+      </symbol>
+      <symbol id="ic-link" viewBox="0 0 24 24">
+        <path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+      </symbol>
+      <symbol id="ic-search" viewBox="0 0 24 24">
+        <circle cx="11" cy="11" r="7" fill="none" stroke="currentColor" stroke-width="2"/>
+        <path d="M20 20l-3.5-3.5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+      </symbol>
+  </defs>
+</svg>
+
+<main id="project-page" class="project-page">
+  <div class="pp-side">
+    <section class="card pp-head">
+      <div class="pp-title-row">
+        <h2 id="pp-name"></h2>
+        <button id="pp-edit" type="button" class="small">編輯</button>
+      </div>
+      <p id="pp-desc" class="pp-desc"></p>
+      <p id="pp-meta" class="muted"></p>
+      <div id="pp-ai" class="pp-ai"></div>
+    </section>
+
+    <section class="card pp-questions">
+      <div class="block-head">
+        <h3>研究問題</h3>
+        <button id="pp-suggest" type="button" class="link-btn">AI 建議問題</button>
+      </div>
+      <ul id="pp-questions" class="pp-qs"></ul>
+      <p id="pp-q-hint" class="muted pp-hint">拖曳左側握把調整順序；點問題展開筆記與缺口。</p>
+      <div id="pp-suggestions" class="pp-sugg" hidden></div>
+      <form id="pp-add-question" class="pp-add-q">
+        <input id="pp-new-question" type="text" maxlength="200" placeholder="新增研究問題…">
+        <button type="submit" class="primary">新增</button>
+      </form>
+    </section>
+  </div>
+
+  <div class="pp-main">
+    <div class="pp-tabs" role="tablist">
+      <button type="button" role="tab" data-tab="items" aria-selected="true">內容</button>
+      <button type="button" role="tab" data-tab="claims" aria-selected="false">對照表</button>
+      <button type="button" role="tab" data-tab="mindmap" aria-selected="false">心智圖</button>
+      <button type="button" role="tab" data-tab="notes" aria-selected="false">筆記</button>
+    </div>
+
+    <section id="pp-tab-items" class="pp-panel">
+      <div class="pp-tools">
+        <label class="pp-search">
+          <svg class="icon-sm"><use href="#ic-search"/></svg>
+          <input id="pp-search" type="search" placeholder="只搜這個專案的全文…">
+        </label>
+        <div class="pp-chips" role="group" aria-label="排序">
+          <button type="button" data-sort="published" aria-pressed="true">發布時間</button>
+          <button type="button" data-sort="added" aria-pressed="false">歸入時間</button>
+        </div>
+      </div>
+      <div id="pp-kinds" class="pp-chips" role="group" aria-label="類型"></div>
+      <ul id="pp-items" class="episode-list pp-items"></ul>
+    </section>
+
+    <section id="pp-tab-claims" class="pp-panel" hidden></section>
+
+    <section id="pp-tab-mindmap" class="pp-panel" hidden>
+      <p id="pp-mindmap-info" class="pp-gen muted"></p>
+      <div class="mindmap-wrap" id="pp-mindmap-wrap">
+        <div id="pp-mindmap"></div>
+        <button id="pp-mindmap-full" class="mindmap-full-btn" type="button">
+          <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg>放大檢視
+        </button>
+      </div>
+    </section>
+
+    <section id="pp-tab-notes" class="pp-panel" hidden>
+      <div id="pp-note" class="md-box"></div>
+      <p id="pp-note-info" class="muted"></p>
+    </section>
+  </div>
+</main>
+
+<dialog id="pp-edit-dialog" class="projects-dialog">
+  <form id="pp-edit-form" method="dialog">
+    <h3>編輯研究專案</h3>
+    <label for="pp-edit-name">名稱</label>
+    <input id="pp-edit-name" type="text" maxlength="100" required>
+    <label for="pp-edit-desc">說明（選填）</label>
+    <textarea id="pp-edit-desc" rows="3" maxlength="2000"></textarea>
+    <menu>
+      <button type="button" id="pp-delete" class="danger pp-delete">刪除專案</button>
+      <button value="cancel" formnovalidate>取消</button>
+      <button id="pp-edit-save" value="ok" class="primary">儲存</button>
+    </menu>
+  </form>
+</dialog>
+
+<div id="mindmap-overlay" class="mindmap-overlay" hidden role="dialog" aria-modal="true" aria-label="心智圖">
+  <div class="mindmap-overlay-bar">
+    <span class="mindmap-overlay-title">心智圖</span>
+    <button id="btn-mindmap-reset" type="button">
+      <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12a8 8 0 1 0 2.4-5.7M4 4v4h4"/></svg>重置
+    </button>
+    <button id="btn-mindmap-close" type="button">
+      <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>關閉
+    </button>
+  </div>
+  <div class="mindmap-stage">
+    <div id="mindmap-full"></div>
+    <span class="mindmap-stage-hint">拖曳平移 · 滾輪縮放 · Esc 關閉</span>
+  </div>
+</div>
+
+<script type="module">
+  // 心智圖以 markmap 渲染（資料存 mermaid 語法，前端轉譯）；掛到 window 供 project.js 呼叫
+  import { renderMindmap } from "./mindmap-render.js";
+  window.renderMarkmap = renderMindmap;
+</script>
+<!-- 筆記編輯器（OverType）、Markdown 轉換與過濾、研究問題拖曳排序 -->
+<script src="https://cdn.jsdelivr.net/npm/overtype@2.4.2/dist/overtype.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/marked@18.0.13/lib/marked.umd.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/dompurify@3.4.15/dist/purify.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.7/Sortable.min.js"></script>
+<script src="common.js"></script>
+<script src="project.js"></script>
+</body>
+</html>

@@ -1,0 +1,16 @@
+meta {
+  name: AI整理進度
+  type: http
+  seq: 36
+}
+
+get {
+  url: {{localBase}}/api/projects/{{projectId}}/ai
+  body: none
+  auth: none
+}
+
+docs {
+  AI 整理與建議問題的產生進度：{"insights": {"running", "error"}, "suggestions": {...}}。
+  進度只存在本機服務的記憶體，重新啟動後歸零。
+}

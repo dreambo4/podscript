@@ -1,0 +1,19 @@
+meta {
+  name: 清空建議問題
+  type: http
+  seq: 12
+}
+
+delete {
+  url: {{mobileBase}}/api/projects/{{projectId}}/suggestions
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+docs {
+  清空尚未處理的 AI 建議問題（「都不要」），成功回 204。建議問題只能在本機產生。
+}
