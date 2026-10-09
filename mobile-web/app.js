@@ -853,7 +853,6 @@ function highlightHtml(text, query, options) {
 }
 
 // 手機端只把網址存進資料庫，實際下載與轉錄回本機端再跑。
-const QUEUE_OPEN_KEY = "podscript_queue_open";
 
 let queueItems = [];
 
@@ -947,7 +946,6 @@ async function loadQueue() {
 function setQueueOpen(open) {
   document.querySelector("#queue-toggle").setAttribute("aria-expanded", String(open));
   document.querySelector("#queue-body").hidden = !open;
-  localStorage.setItem(QUEUE_OPEN_KEY, open ? "1" : "0");
 }
 
 document.querySelector("#queue-toggle").addEventListener("click", () => {
@@ -987,7 +985,10 @@ document.querySelector("#queue-form").addEventListener("submit", async (e) => {
   }
 });
 
-setQueueOpen(localStorage.getItem(QUEUE_OPEN_KEY) === "1");
+// 每次進來都收合，不記住上次的開合（主畫面捷徑帶 queue=open 時才展開，見路由）。
+// 清掉舊版記住開合用的值。
+setQueueOpen(false);
+try { localStorage.removeItem("podscript_queue_open"); } catch {}
 
 // ── 篩選 Bottom Sheet ────────────────────────────────
 let sheetSort = getSort();
