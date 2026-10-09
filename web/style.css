@@ -168,17 +168,8 @@ body.sidebar-collapsed .icon-btn { display: block; }
   cursor: pointer;
 }
 .project-chips button.on { border-color: var(--accent); background: var(--accent); color: #fff; }
+.project-chips button.add { border-style: dashed; color: var(--accent); }
 .project-chips .muted { margin: 0; }
-.new-project { display: flex; gap: 6px; max-width: 420px; }
-.new-project input {
-  flex: 1;
-  min-width: 0;
-  padding: 6px 10px;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  font: inherit;
-  font-size: 13px;
-}
 
 .projects-dialog { width: min(560px, 92vw); }
 #filter {
@@ -603,6 +594,7 @@ button .spinner { margin-right: 4px; }
 }
 
 .ep-status { color: var(--accent); font-size: 13px; }
+#btn-cancel-job, #btn-delete-job { color: #a33; }
 .ep-error { color: var(--warn); font-size: 13px; }
 
 /* 逐字稿 */

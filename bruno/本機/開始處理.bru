@@ -33,6 +33,7 @@ docs {
   queue_id：由待處理清單觸發時帶入，供回填標題與結案。
   project_ids：處理完成後歸入的研究專案（選填，可多個）；處理失敗不歸入，已刪除的專案略過。
   記在 job.json，接續中斷的處理時沿用。
+  一次只處理一集：已有任務在跑時排進佇列，回傳的 stage 為 queued、message 為「排隊中，前面還有 N 集」。
 }
 
 script:post-response {

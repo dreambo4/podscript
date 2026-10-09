@@ -152,12 +152,14 @@ function showProgress(job) {
   const failed = Boolean(job.error);
   const running = !job.done && !failed;
 
-  $("progress-message").textContent = failed
+  $("progress-message").textContent = job.cancelled
+    ? "已取消排隊"
+    : failed
     ? `處理失敗：${job.error}`
     : job.percent != null
       ? `${job.message} ${job.percent}%`
       : job.message;
-  $("progress-message").className = failed ? "error" : "";
+  $("progress-message").className = failed && !job.cancelled ? "error" : "";
   $("spinner").hidden = !running;
   $("progress-elapsed").textContent = running ? elapsed(job.started_at) : "";
 
@@ -165,6 +167,18 @@ function showProgress(job) {
   const resume = $("btn-resume");
   resume.hidden = !failed || !canResume(job);
   resume.dataset.guid = job.guid;
+  resume.textContent = job.cancelled ? "▶ 重新排入" : "▶ 繼續處理";
+
+  // 排隊中可終止；已開始處理的不行
+  const cancel = $("btn-cancel-job");
+  cancel.hidden = job.done || job.stage !== "queued";
+  cancel.dataset.guid = job.guid;
+
+  // 失敗或已取消排隊（處理沒有完成）的可以整筆刪除
+  const del = $("btn-delete-job");
+  del.hidden = !failed;
+  del.dataset.guid = job.guid;
+  del.dataset.title = job.title;
 
   const index = job.stages.indexOf(job.stage);
   $("stages").innerHTML = job.stages
@@ -202,6 +216,39 @@ $("btn-resume").addEventListener("click", async (e) => {
     btn.disabled = false;
   }
 });
+
+$("btn-cancel-job").addEventListener("click", (e) => cancelQueuedJob(e.currentTarget.dataset.guid, e.currentTarget));
+
+$("btn-delete-job").addEventListener("click", async (e) => {
+  const btn = e.currentTarget;
+  const { guid, title } = btn.dataset;
+  if (!confirm(`刪除「${title}」？\n這筆的任務紀錄與本機已下載、已轉錄的檔案都會刪除。\n此動作無法復原。`)) return;
+  btn.disabled = true;
+  try {
+    await api(`/api/episodes/${encodeURIComponent(guid)}`, { method: "DELETE" });
+    location.hash = "";
+    await loadLibrary();
+  } catch (err) {
+    alert(err.message);
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+/** 從排隊中移除（只在單集的進度頁提供）；已開始處理的會被後端拒絕（409）。 */
+async function cancelQueuedJob(guid, btn) {
+  const job = allEpisodes.find((x) => x.guid === guid);
+  if (!confirm(`終止排隊中的「${job?.title || guid}」？\n之後可在這一集按「重新排入」。`)) return;
+  if (btn) btn.disabled = true;
+  try {
+    await api(`/api/jobs/${encodeURIComponent(guid)}/cancel`, { method: "POST" });
+    await Promise.all([loadLibrary(), loadQueue()]);
+    if (location.hash.slice(1) === guid) await poll(guid);
+  } catch (err) {
+    alert(err.message);
+    if (btn) btn.disabled = false;
+  }
+}
 
 /** 論文沒有網址，由本機的 PDF 接續；其他內容要有原始網址才能接續。 */
 function canResume(job) {
@@ -249,8 +296,8 @@ async function poll(guid) {
   }
 
   // 中斷的任務（多半是服務重啟）直接接續，不必使用者介入；
-  // 已完成的階段會因檔案存在而跳過，不會重跑。
-  if (job.error && canResume(job) && !resumed.has(guid)) {
+  // 已完成的階段會因檔案存在而跳過，不會重跑。使用者終止排隊的不自動接續，要按「重新排入」。
+  if (job.error && !job.cancelled && canResume(job) && !resumed.has(guid)) {
     resumed.add(guid);
     try {
       await api(`/api/jobs/${guid}/resume`, { method: "POST" });
@@ -1017,14 +1064,15 @@ function renderQueue() {
   const list = $("queue-list");
   list.innerHTML = "";
 
-  queueItems.forEach((item) => {
+  queueOrder(queueItems).forEach((item) => {
     // 開始處理時後端已回填 episode_guid，據此比對該集目前的狀態。
     // 已在處理中就不該能再按一次，否則會重複送出同一集。
     const episode = item.episode_guid
       ? allEpisodes.find((e) => e.guid === item.episode_guid)
       : null;
     const processing = Boolean(episode && episode.processing);
-    const failed = Boolean(episode && episode.error);
+    const cancelled = Boolean(episode && episode.cancelled);
+    const failed = Boolean(episode && episode.error && !cancelled);
     // 已處理完成但尚未上傳：項目要到上傳成功才結案，這段期間不能再開始處理，
     // 改成「查看」直接跳到該集。
     const done = Boolean(episode && episode.ready && !processing && !failed);
@@ -1035,16 +1083,26 @@ function renderQueue() {
         <span class="queue-item-title">${escapeHtml(item.title || item.url)}</span>
         ${item.note ? `<span class="queue-item-note">${escapeHtml(item.note)}</span>` : ""}
         ${queueProjectsHtml(item)}
-        ${processing ? `<span class="queue-item-status">處理中…${escapeHtml(episode.message || "")}</span>` : ""}
+        ${processing ? `<span class="queue-item-status">${
+          episode.stage === "queued" ? escapeHtml(episode.message || "排隊中") : `處理中…${escapeHtml(episode.message || "")}`
+        }</span>` : ""}
         ${failed ? `<span class="queue-item-status failed">處理失敗，可再試一次</span>` : ""}
-        ${done ? `<span class="queue-item-status">已處理完成，待上傳</span>` : ""}
+        ${cancelled ? `<span class="queue-item-status">已取消排隊</span>` : ""}
+        ${done ? `<span class="queue-item-status">已處理完成，上傳後會自動移出這個清單</span>` : ""}
         <div class="queue-actions">
           ${
             done
               ? `<button type="button" class="view">查看</button>`
-              : `<button type="button" class="go"${processing ? " disabled" : ""}>${failed ? "▶ 重新處理" : "▶ 開始處理"}</button>`
+              : processing
+                ? ""
+                : `<button type="button" class="go">${failed || cancelled ? "▶ 重新處理" : "▶ 開始處理"}</button>`
           }
-          <button type="button" class="del"${processing ? " disabled" : ""}>移除</button>
+          ${
+            // 處理中不能刪；已完成的上傳後會自動結案，不需要手動刪
+            processing || done
+              ? ""
+              : `<button type="button" class="del" title="從清單刪掉這筆網址，不會刪除已處理的內容">不處理了</button>`
+          }
         </div>
       </div>
     `;
@@ -1072,7 +1130,7 @@ function renderQueue() {
       }
     });
 
-    li.querySelector(".del").addEventListener("click", async () => {
+    li.querySelector(".del")?.addEventListener("click", async () => {
       try {
         await api(`/api/queue/${item.id}`, { method: "DELETE" });
         queueItems = queueItems.filter((i) => i.id !== item.id);
@@ -1121,7 +1179,7 @@ function renderLibrary() {
 
   const selected = location.hash.slice(1);
   const groups = [
-    ["處理中", shown.filter((e) => e.processing)],
+    ["處理中", processingOrder(shown.filter((e) => e.processing))],
     // 已上傳但本機有重新生成的內容，需再次上傳才會更新資料庫與手機端
     ["待重新上傳", shown.filter((e) => !e.processing && e.needs_reupload)],
     ["未上傳", shown.filter((e) => !e.processing && !e.uploaded_at)],
@@ -1148,6 +1206,34 @@ function renderLibrary() {
   });
 }
 
+/**
+ * 手機待處理的順序比照處理中分組：正在處理的在最上面，排隊中的依排入先後接在後面，
+ * 其餘（尚未開始、失敗、待上傳）維持原本的順序（新加入的在前）。
+ */
+function queueOrder(items) {
+  const episodeOf = (item) => allEpisodes.find((e) => e.guid === item.episode_guid);
+  const rank = (item) => {
+    const e = episodeOf(item);
+    if (!e?.processing) return 2;
+    return e.stage === "queued" ? 1 : 0;
+  };
+  return items
+    .map((item, index) => ({ item, index, rank: rank(item), queuedAt: episodeOf(item)?.created_at || "" }))
+    .sort((a, b) => a.rank - b.rank || (a.rank === 1 ? a.queuedAt.localeCompare(b.queuedAt) : a.index - b.index))
+    .map((x) => x.item);
+}
+
+/**
+ * 處理中分組的順序：正在處理的在最上面，排隊中的依排入先後往下（下一個要處理的緊接在後）。
+ * 排入時間即任務建立時間，未上傳的單集以此作為 created_at。
+ */
+function processingOrder(items) {
+  const queued = (e) => e.stage === "queued";
+  return [...items].sort(
+    (a, b) => queued(a) - queued(b) || (a.created_at || "").localeCompare(b.created_at || "")
+  );
+}
+
 $("filter").addEventListener("input", renderLibrary);
 // ── 研究專案 ────────────────────────────────────────
 // 專案存在資料庫，兩台電腦共用；未上傳的單集也能歸類。
@@ -1170,14 +1256,29 @@ async function loadProjects() {
 function renderEpisodeProjects() {
   const box = $("episode-projects");
   const mine = new Set(current.projects || []);
-  box.innerHTML = allProjects.length
-    ? allProjects
-        .map(
-          (p) =>
-            `<button type="button" class="${mine.has(p.id) ? "on" : ""}" data-id="${p.id}" aria-pressed="${mine.has(p.id)}">${escapeHtml(p.name)}</button>`
-        )
-        .join("")
-    : `<p class="muted">還沒有專案，可在下方新增</p>`;
+  box.innerHTML =
+    allProjects
+      .map(
+        (p) =>
+          `<button type="button" class="${mine.has(p.id) ? "on" : ""}" data-id="${p.id}" aria-pressed="${mine.has(p.id)}">${escapeHtml(p.name)}</button>`
+      )
+      .join("") + `<button type="button" class="add" data-action="add">＋ 新增專案</button>`;
+  // 與手機版相同：跳出輸入視窗，新增後直接歸入這一集
+  box.querySelector("[data-action=add]").addEventListener("click", async (e) => {
+    const name = (prompt("新專案名稱") || "").trim();
+    if (!name) return;
+    const btn = e.currentTarget;
+    btn.disabled = true;
+    btn.textContent = "新增中…";
+    try {
+      const project = await api("/api/projects", { method: "POST", body: { name } });
+      allProjects.push(project);
+      await saveEpisodeProjects([...(current.projects || []), project.id]);
+    } catch (err) {
+      alert(err.message);
+      renderEpisodeProjects();
+    }
+  });
   box.querySelectorAll("button[data-id]").forEach((btn) => {
     btn.addEventListener("click", () => {
       const ids = new Set(current.projects || []);
@@ -1201,20 +1302,6 @@ async function saveEpisodeProjects(ids) {
     alert(err.message);
   }
 }
-
-$("new-project-form").addEventListener("submit", async (e) => {
-  e.preventDefault();
-  const name = $("new-project-name").value.trim();
-  if (!name) return;
-  try {
-    const project = await api("/api/projects", { method: "POST", body: { name } });
-    $("new-project-name").value = "";
-    allProjects.push(project);
-    await saveEpisodeProjects([...(current.projects || []), project.id]);
-  } catch (err) {
-    alert(err.message);
-  }
-});
 
 // ── 側邊欄（窄螢幕） ────────────────────────────────
 

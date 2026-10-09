@@ -1,0 +1,17 @@
+meta {
+  name: 終止排隊
+  type: http
+  seq: 39
+}
+
+post {
+  url: {{localBase}}/api/jobs/{{guid}}/cancel
+  body: none
+  auth: none
+}
+
+docs {
+  把排隊中的任務移出佇列並標為已取消（cancelled: true、error: 已取消排隊），回傳 job。
+  已開始處理或已結束的回 409；查無此任務回 404。
+  已取消的可用「接續中斷任務」（POST /api/jobs/{guid}/resume）重新排入；前端不會自動接續。
+}

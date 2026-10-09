@@ -2,6 +2,7 @@
 // 先於各頁腳本載入；頁面需有 svg 圖示定義（ic-audio 等），用到心智圖全螢幕的頁面另需 #mindmap-overlay。
 
 const STAGE_LABELS = {
+  queued: "排隊", // 一次只處理一集，其他集排隊等前一集（含摘要）完成
   resolve: "解析",
   download: "下載",
   transcribe: "轉錄",
@@ -50,10 +51,14 @@ function episodeRow(e, selected) {
     .join(" · ");
 
   // 處理進度與待辦提示另起一行，與手機卡片的版面一致
-  const status = e.processing
+  const status = e.processing && e.stage === "queued"
+    ? `<span class="ep-status">排隊中…</span>`
+    : e.processing
     ? `<span class="ep-status"><span class="spinner"></span> ${escapeHtml(
         STAGE_LABELS[e.stage] || e.stage
       )}中${e.percent != null ? ` ${e.percent}%` : "…"}</span>`
+    : e.cancelled
+      ? `<span class="ep-status muted">已取消排隊，點擊可重新排入</span>`
     : e.error
       ? `<span class="ep-status ep-error">未完成，點擊繼續</span>`
       : !e.has_summary

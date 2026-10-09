@@ -54,6 +54,7 @@ class Job:
     error: str = ""
     # 開始處理時選的研究專案；處理完成才歸入，失敗不歸入（spec §6.1）
     project_ids: list[str] = field(default_factory=list)
+    cancelled: bool = False  # 排隊中被使用者終止；可按「重新排入」接續
     started_at: str = field(
         default_factory=lambda: datetime.now(timezone.utc).isoformat()
     )
@@ -71,6 +72,7 @@ class Job:
             "done": self.done,
             "error": self.error,
             "project_ids": self.project_ids,
+            "cancelled": self.cancelled,
             "started_at": self.started_at,
             "updated_at": self.updated_at,
             "stages": [
@@ -222,8 +224,7 @@ def start_process(req: ProcessRequest) -> dict:
         job.save()
         _jobs[guid] = job
 
-    thread = threading.Thread(target=_run, args=(job, task), daemon=True)
-    thread.start()
+    _enqueue(job, task)
     return job.to_dict()
 
 
@@ -266,8 +267,7 @@ async def start_paper(request: Request, filename: str = "", project_ids: str = "
         _jobs[guid] = job
 
     task = _paper_task(parsed, filename)
-    thread = threading.Thread(target=_run, args=(job, task), daemon=True)
-    thread.start()
+    _enqueue(job, task)
     return job.to_dict()
 
 
@@ -294,6 +294,72 @@ def _paper_task(parsed: paper.Paper, filename: str) -> Task:
     return lambda on_progress: pipeline.process_paper(
         parsed, filename=filename, on_progress=on_progress
     )
+
+
+# ── 一次只處理一集 ──────────────────────────────────
+# 轉錄與說話者分離會把模型整份載入記憶體，8 GB 的機器同時跑兩集可能整台卡住；
+# 使用者要求一集完整做完（含摘要）才開始下一集。所有任務（Podcast、文章、論文、接續）
+# 排進同一個佇列，由單一工作執行緒依序執行。佇列只在記憶體，服務重啟時排隊中的任務
+# 會被 _read_job 標記為中斷，可按「繼續處理」重新排入。
+
+_pending: list[tuple[Job, "Task"]] = []
+_current: Job | None = None
+_queue_cv = threading.Condition()
+
+
+def _enqueue(job: Job, task: Task) -> None:
+    """排入佇列；前面沒有任務就立刻開始。"""
+    with _queue_cv:
+        _pending.append((job, task))
+        _update_queue_messages()
+        _queue_cv.notify()
+
+
+def _update_queue_messages() -> None:
+    """更新排隊中任務的進度訊息（呼叫端須持有 _queue_cv）。"""
+    for position, (job, _task) in enumerate(_pending):
+        ahead = position + (1 if _current is not None else 0)
+        job.stage = "queued"
+        job.message = f"排隊中，前面還有 {ahead} 集" if ahead else "即將開始"
+        job.save()
+
+
+def _cancel_queued(guid: str) -> Job | None:
+    """把排隊中的任務移出佇列並標記為已取消；不在佇列裡（已開始或已結束）回傳 None。"""
+    with _queue_cv:
+        for index, (job, _task) in enumerate(_pending):
+            if job.guid == guid:
+                _pending.pop(index)
+                job.done = True
+                job.cancelled = True
+                job.error = "已取消排隊"
+                job.message = "已取消排隊"
+                job.save()
+                with _lock:
+                    _jobs.pop(guid, None)
+                _update_queue_messages()
+                return job
+    return None
+
+
+def _worker() -> None:
+    global _current
+    while True:
+        with _queue_cv:
+            while not _pending:
+                _queue_cv.wait()
+            job, task = _pending.pop(0)
+            _current = job
+            _update_queue_messages()
+        try:
+            _run(job, task)
+        finally:
+            with _queue_cv:
+                _current = None
+                _update_queue_messages()
+
+
+threading.Thread(target=_worker, daemon=True, name="job-worker").start()
 
 
 def _run(job: Job, task: Task) -> None:
@@ -350,6 +416,20 @@ def list_jobs() -> list[dict]:
     return [job.to_dict() for job in _jobs.values() if not job.done]
 
 
+@app.post("/api/jobs/{guid}/cancel")
+def cancel_job(guid: str) -> dict:
+    """終止排隊中的任務。已開始處理的不能終止（回 409），避免轉錄做到一半留下不完整的檔案。"""
+    job = _cancel_queued(guid)
+    if job is not None:
+        return job.to_dict()
+    current = _read_job(guid)
+    if current is None:
+        raise HTTPException(status_code=404, detail="查無此任務")
+    if current.done:
+        raise HTTPException(status_code=409, detail="這集已經結束處理，不需要終止")
+    raise HTTPException(status_code=409, detail="這集已經開始處理，無法終止；只能終止排隊中的")
+
+
 @app.post("/api/jobs/{guid}/resume")
 def resume_job(guid: str) -> dict:
     """接續中斷的處理。
@@ -381,8 +461,7 @@ def resume_job(guid: str) -> dict:
         job.save()
         _jobs[guid] = job
 
-    thread = threading.Thread(target=_run, args=(job, task), daemon=True)
-    thread.start()
+    _enqueue(job, task)
     return job.to_dict()
 
 
@@ -527,6 +606,7 @@ def _episode_summary(
         "stage": job.stage if job else "",
         "message": job.message if job else "",
         "error": job.error if job else "",
+        "cancelled": bool(job and job.cancelled),
     }
 
 

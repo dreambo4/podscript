@@ -102,6 +102,8 @@
         <span id="progress-message"></span>
         <span class="muted" id="progress-elapsed"></span>
         <button id="btn-resume" type="button" hidden>▶ 繼續處理</button>
+        <button id="btn-cancel-job" type="button" class="danger" hidden>終止排隊</button>
+        <button id="btn-delete-job" type="button" class="danger" hidden>刪除</button>
       </p>
     </section>
 
@@ -138,10 +140,6 @@
           <h3>研究專案</h3>
         </div>
         <div id="episode-projects" class="project-chips"></div>
-        <form id="new-project-form" class="new-project">
-          <input id="new-project-name" type="text" placeholder="新增專案並加入這一集…" maxlength="100">
-          <button type="submit" class="secondary">新增</button>
-        </form>
       </div>
 
       <div class="block">
