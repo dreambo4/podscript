@@ -36,7 +36,7 @@
 <meta name="twitter:description" content="Podcast 逐字稿工具：分角色逐字稿、摘要、心智圖">
 <meta name="twitter:image" content="icons/og-image.png">
 
-<link rel="stylesheet" href="style.css?v=861f1c1c6a83">
+<link rel="stylesheet" href="style.css?v=7e9c379c8d23">
 <script src="config.js"></script>
 </head>
 <body>
@@ -387,41 +387,44 @@
   <div class="sheet">
     <h3>篩選與排序</h3>
 
-    <div class="sheet-group">
-      <span class="sheet-label">頻道</span>
-      <div id="sheet-channel-chips" class="sheet-chips"></div>
-    </div>
-
-    <div class="sheet-group" id="sheet-project-group" hidden>
-      <span class="sheet-label">研究專案</span>
-      <div id="sheet-project-chips" class="sheet-chips"></div>
-    </div>
-
-    <div class="sheet-group">
-      <span class="sheet-label">類型</span>
-      <div class="sheet-chips">
-        <button type="button" class="sheet-chip" data-kind="">全部</button>
-        <button type="button" class="sheet-chip" data-kind="audio"><svg class="icon icon-xs"><use href="#ic-audio"/></svg> 音檔</button>
-        <button type="button" class="sheet-chip" data-kind="video"><svg class="icon icon-xs"><use href="#ic-video"/></svg> 影片</button>
-        <button type="button" class="sheet-chip" data-kind="article"><svg class="icon icon-xs"><use href="#ic-article"/></svg> 文章</button>
-        <button type="button" class="sheet-chip" data-kind="paper"><svg class="icon icon-xs"><use href="#ic-paper"/></svg> 論文</button>
+    <div class="sheet-body">
+      <div class="sheet-group">
+        <span class="sheet-label">頻道</span>
+        <div id="sheet-channel-chips" class="sheet-chips"></div>
+        <button type="button" id="sheet-channel-more" class="sheet-more" hidden></button>
       </div>
-    </div>
 
-    <div class="sheet-group">
-      <span class="sheet-label">排序依據</span>
-      <div class="sheet-chips">
-        <button type="button" class="sheet-chip" data-sort="created_at">建檔日期</button>
-        <button type="button" class="sheet-chip" data-sort="published_at">發佈日期</button>
+      <div class="sheet-group" id="sheet-project-group" hidden>
+        <span class="sheet-label">研究專案</span>
+        <div id="sheet-project-chips" class="sheet-chips"></div>
       </div>
-    </div>
 
-    <div class="sheet-group" style="margin-bottom:6px;">
-      <span class="sheet-label">其他</span>
-      <div class="sheet-chips">
-        <button type="button" id="sheet-favorites-only" class="sheet-chip">
-          <svg class="icon icon-xs"><use href="#ic-heart-fill"/></svg> 只看收藏
-        </button>
+      <div class="sheet-group">
+        <span class="sheet-label">類型</span>
+        <div class="sheet-chips">
+          <button type="button" class="sheet-chip" data-kind="">全部</button>
+          <button type="button" class="sheet-chip" data-kind="audio"><svg class="icon icon-xs"><use href="#ic-audio"/></svg> 音檔</button>
+          <button type="button" class="sheet-chip" data-kind="video"><svg class="icon icon-xs"><use href="#ic-video"/></svg> 影片</button>
+          <button type="button" class="sheet-chip" data-kind="article"><svg class="icon icon-xs"><use href="#ic-article"/></svg> 文章</button>
+          <button type="button" class="sheet-chip" data-kind="paper"><svg class="icon icon-xs"><use href="#ic-paper"/></svg> 論文</button>
+        </div>
+      </div>
+
+      <div class="sheet-group">
+        <span class="sheet-label">排序依據</span>
+        <div class="sheet-chips">
+          <button type="button" class="sheet-chip" data-sort="created_at">建檔日期</button>
+          <button type="button" class="sheet-chip" data-sort="published_at">發佈日期</button>
+        </div>
+      </div>
+
+      <div class="sheet-group" style="margin-bottom:6px;">
+        <span class="sheet-label">其他</span>
+        <div class="sheet-chips">
+          <button type="button" id="sheet-favorites-only" class="sheet-chip">
+            <svg class="icon icon-xs"><use href="#ic-heart-fill"/></svg> 只看收藏
+          </button>
+        </div>
       </div>
     </div>
 
@@ -457,7 +460,7 @@
   // markmap 從 CDN 載入，可能晚於詳情頁資料到達；通知 app.js 補畫。
   window.dispatchEvent(new Event("markmap-ready"));
 </script>
-<script src="app.js?v=c6b99d082fcd"></script>
+<script src="app.js?v=2a4752363532"></script>
 <script src="https://accounts.google.com/gsi/client" async defer onload="initGoogleSignIn()"></script>
 </body>
 </html>

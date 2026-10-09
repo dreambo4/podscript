@@ -643,7 +643,13 @@ html.scrubbing #detail-view .chapter-title { position: static; }
   background: var(--card);
   border-radius: 20px 20px 0 0;
   padding: 20px 18px calc(20px + env(safe-area-inset-bottom));
+  /* 頻道一多會超出螢幕：限高，標題與按鈕固定，中間 .sheet-body 自己捲 */
+  max-height: 85vh;
+  max-height: 85dvh;
+  display: flex;
+  flex-direction: column;
 }
+.sheet-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
 
 .sheet h3 { margin: 0 0 16px; font-size: 15px; font-weight: 800; }
 .sheet-group { margin-bottom: 18px; }
@@ -671,6 +677,19 @@ html.scrubbing #detail-view .chapter-title { position: static; }
   cursor: pointer;
 }
 .sheet-chip.active { background: var(--accent); color: var(--accent-ink); }
+/* 頻道收合時只露出兩列（chip 34px 高、列距 6px） */
+.sheet-chips.collapsed { max-height: 74px; overflow: hidden; }
+.sheet-more {
+  margin-top: 8px;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--accent);
+  cursor: pointer;
+}
 
 .sheet-actions { display: flex; gap: 10px; margin-top: 4px; }
 .sheet-actions button {

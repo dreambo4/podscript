@@ -984,11 +984,14 @@ function syncSheetKindChips() {
   });
 }
 
+// 頻道多時預設只露出兩列，避免面板被頻道撐滿整個螢幕；每次開面板重新收合
+let sheetChannelsExpanded = false;
+
 function renderSheetChannelChips() {
   const container = document.querySelector("#sheet-channel-chips");
   const allChip = `<button type="button" class="sheet-chip${sheetChannel === "" ? " active" : ""}" data-channel="">全部</button>`;
   const chips = allChannels.map(c =>
-    `<button type="button" class="sheet-chip${sheetChannel === c.podcast_name ? " active" : ""}" data-channel="${encodeURIComponent(c.podcast_name)}">${c.podcast_name}（${c.count}）</button>`
+    `<button type="button" class="sheet-chip${sheetChannel === c.podcast_name ? " active" : ""}" data-channel="${encodeURIComponent(c.podcast_name)}">${escapeHtml(c.podcast_name)}（${c.count}）</button>`
   );
   container.innerHTML = allChip + chips.join("");
 
@@ -998,7 +1001,29 @@ function renderSheetChannelChips() {
       container.querySelectorAll(".sheet-chip").forEach(b => b.classList.toggle("active", b === btn));
     });
   });
+  syncChannelCollapse();
 }
+
+// 須在面板顯示後呼叫，隱藏時量不到高度
+function syncChannelCollapse() {
+  const container = document.querySelector("#sheet-channel-chips");
+  const more = document.querySelector("#sheet-channel-more");
+  container.classList.add("collapsed");
+  const overflows = container.scrollHeight > container.clientHeight + 1;
+  // 選中的頻道被收在下面時直接展開，否則看不出目前篩的是哪個
+  const active = container.querySelector(".sheet-chip.active");
+  if (active && active.getBoundingClientRect().top - container.getBoundingClientRect().top >= container.clientHeight) {
+    sheetChannelsExpanded = true;
+  }
+  container.classList.toggle("collapsed", overflows && !sheetChannelsExpanded);
+  more.hidden = !overflows;
+  more.textContent = sheetChannelsExpanded ? "收合" : `顯示全部頻道（${allChannels.length}）`;
+}
+
+document.querySelector("#sheet-channel-more").addEventListener("click", () => {
+  sheetChannelsExpanded = !sheetChannelsExpanded;
+  syncChannelCollapse();
+});
 
 function openFilterSheet() {
   sheetSort = getSort();
@@ -1006,7 +1031,11 @@ function openFilterSheet() {
   sheetFavoritesOnly = currentFavoritesOnly;
   sheetKind = currentKind;
   sheetProject = currentProject;
+  sheetChannelsExpanded = false;
 
+  // 先顯示再繪製：頻道收合要量高度。同步執行完才重繪，不會閃出舊狀態
+  document.querySelector("#filter-sheet").hidden = false;
+  document.querySelector("#filter-sheet .sheet-body").scrollTop = 0;
   renderSheetChannelChips();
   renderSheetProjectChips();
   syncSheetKindChips();
@@ -1014,8 +1043,6 @@ function openFilterSheet() {
     btn.classList.toggle("active", btn.dataset.sort === sheetSort);
   });
   document.querySelector("#sheet-favorites-only").classList.toggle("active", sheetFavoritesOnly);
-
-  document.querySelector("#filter-sheet").hidden = false;
 }
 
 function closeFilterSheet() {
