@@ -453,17 +453,17 @@ function renderPvClaims() {
   }
   const sources = claims.sources;
   const groups = [
-    ["說法不同", r => Object.values(r.marks).includes("differ")],
-    ["多篇提到", r => Object.values(r.marks).filter(m => m === "agree").length >= 2],
-    ["只有一篇提到", () => true],
+    ["說法不同", "differ", r => Object.values(r.marks).includes("differ")],
+    ["多篇提到", "multi", r => Object.values(r.marks).filter(m => m === "agree").length >= 2],
+    ["只有一篇提到", "single", () => true],
   ];
   const strip = cells => `<div class="pv-strip"><div class="pv-strip-inner">${cells}</div></div>`;
   const used = new Set();
-  const body = groups.map(([label, test]) => {
+  const body = groups.map(([label, kind, test]) => {
     const rows = claims.rows.filter(r => !used.has(r) && test(r));
     rows.forEach(r => used.add(r));
     if (!rows.length) return "";
-    return `<h4 class="pv-cmp-group">${label}</h4>`
+    return `<h4 class="pv-cmp-group ${kind}"><span>${label}</span><span class="pv-cmp-count">${rows.length} 則</span></h4>`
       + rows.map(r => `<div class="pv-cmp-row">
           <p class="pv-cmp-claim">${escapeHtml(r.claim)}${r.note ? `<span class="muted">${escapeHtml(r.note)}</span>` : ""}</p>
           ${strip(sources.map(s => `<span class="pv-cell">${pvMark(r.marks[s.guid])}</span>`).join(""))}

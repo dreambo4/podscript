@@ -1403,7 +1403,33 @@ a.seg-time { color: var(--accent); text-decoration: underline; text-underline-of
   overflow-wrap: anywhere;
 }
 .pv-cell-src .muted { font-size: 10px; }
-.pv-cmp-group { margin: 14px 0 2px; font-size: 12px; font-weight: 800; letter-spacing: .04em; color: var(--muted); }
+/* 分組標題：整條帶底色（說法不同＝空心圈的 warn、多篇＝藍綠、一篇＝紫） */
+.pv-cmp-group {
+  --group-color: var(--muted);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 22px 0 4px;
+  padding: 8px 12px;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--group-color) 16%, var(--card));
+  color: var(--group-color);
+  font-size: 14px;
+  font-weight: 800;
+  letter-spacing: .04em;
+}
+.pv-cmp-group::before { content: ""; width: 10px; height: 10px; border-radius: 50%; background: var(--group-color); flex: none; }
+.pv-cmp-group.differ { --group-color: var(--warn); }
+/* 多篇提到：主色在淺色模式是粉紅，與頁面底色太接近，改用藍綠色 */
+.pv-cmp-group.multi { --group-color: #2f7f8a; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .pv-cmp-group.multi { --group-color: #6cc3cf; } }
+:root[data-theme="dark"] .pv-cmp-group.multi { --group-color: #6cc3cf; }
+/* 只有一篇提到：原本用灰色（--muted）在粉紅底上顯得黯淡，改用紫羅蘭色 */
+.pv-cmp-group.single { --group-color: #6a5fb5; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .pv-cmp-group.single { --group-color: #ab9ff0; } }
+:root[data-theme="dark"] .pv-cmp-group.single { --group-color: #ab9ff0; }
+.pv-cmp-count { margin-left: auto; font-size: 12px; font-weight: 700; opacity: .8; letter-spacing: 0; }
+.pv-cmp-head + .pv-cmp-group { margin-top: 12px; }
 .pv-cmp-row { padding: 8px 0 6px; border-bottom: 1px solid var(--line); }
 .pv-cmp-claim { margin: 0 0 4px; font-size: 14px; line-height: 1.55; }
 .pv-cmp-claim .muted { display: block; font-size: 12px; }
