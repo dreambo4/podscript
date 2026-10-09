@@ -24,15 +24,15 @@
 
 @media (prefers-color-scheme: dark){
   :root:not([data-theme="light"]){
-    /* 深色 App 風 */
-    --bg: #0f1210;
-    --card: #191d1a;
-    --ink: #f1efe9;
-    --muted: #8c968c;
-    --line: #2a2f2b;
+    /* 深色 App 風：底色、卡片、文字、線條用不帶色調的中性灰，只有主色是薄荷綠（與本機版同一組灰） */
+    --bg: #121212;
+    --card: #1c1c1e;
+    --ink: #ececec;
+    --muted: #9a9a9e;
+    --line: #2e2e31;
     --accent: #7fd99b;
-    --accent-ink: #0f1210;
-    --accent-soft: #20251f;
+    --accent-ink: #121212;
+    --accent-soft: #2c3a32;
     --warn: #f2c14e;
     --heart: #f2748c;
     --topbar-bg: var(--bg);
@@ -45,14 +45,14 @@
   }
 }
 :root[data-theme="dark"]{
-  --bg: #0f1210;
-  --card: #191d1a;
-  --ink: #f1efe9;
-  --muted: #8c968c;
-  --line: #2a2f2b;
+  --bg: #121212;
+  --card: #1c1c1e;
+  --ink: #ececec;
+  --muted: #9a9a9e;
+  --line: #2e2e31;
   --accent: #7fd99b;
-  --accent-ink: #0f1210;
-  --accent-soft: #20251f;
+  --accent-ink: #121212;
+  --accent-soft: #2c3a32;
   --warn: #f2c14e;
   --heart: #f2748c;
   --topbar-bg: var(--bg);

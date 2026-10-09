@@ -4,8 +4,8 @@
   "description": "Podcast 逐字稿工具：分角色逐字稿、摘要、心智圖",
   "start_url": "./index.html",
   "display": "standalone",
-  "background_color": "#0f1210",
-  "theme_color": "#0f1210",
+  "background_color": "#121212",
+  "theme_color": "#121212",
   "icons": [
     {
       "src": "icons/icon-192.png",
