@@ -816,6 +816,10 @@ $("btn-upload").addEventListener("click", async () => {
     current.uploaded_at = new Date().toISOString();
     current.has_audio = false; // 上傳成功後音檔已自動清除
     current.needs_reupload = false;
+    // 合併建議只存在本機 result.json，上傳後已隨本機目錄清除、無法再修改；
+    // 收起標籤比較，與重新開啟這集時一致
+    if (current.summary) current.summary.hashtag_merges = [];
+    renderTagReview(current.summary);
     renderUploadState();
     // 上傳後按鈕會隱藏，先短暫顯示結果
     const freed = res.freed_bytes ? `，釋出 ${(res.freed_bytes / 1048576).toFixed(0)} MB` : "";
