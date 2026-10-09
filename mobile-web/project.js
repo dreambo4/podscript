@@ -442,6 +442,8 @@ async function adoptPvCandidate(ep, btn) {
 
 // ── 對照表 ────────────────────────────────────────────
 
+// 手機版對照表：主張文字獨占一行，下一行是可左右滑的標記列；
+// 所有標記列與頂端的篇目列連動，滑任何一列其他列跟著滑（使用者 2026-10-10 指定的版面）
 function renderPvClaims() {
   const box = document.querySelector("#pv-tab-claims");
   const claims = pv.insights?.claims;
@@ -455,14 +457,17 @@ function renderPvClaims() {
     ["多篇提到", r => Object.values(r.marks).filter(m => m === "agree").length >= 2],
     ["只有一篇提到", () => true],
   ];
+  const strip = cells => `<div class="pv-strip"><div class="pv-strip-inner">${cells}</div></div>`;
   const used = new Set();
   const body = groups.map(([label, test]) => {
     const rows = claims.rows.filter(r => !used.has(r) && test(r));
     rows.forEach(r => used.add(r));
     if (!rows.length) return "";
-    return `<tr class="pv-claim-group"><td colspan="${sources.length + 1}">${label}</td></tr>`
-      + rows.map(r => `<tr><td class="pv-claim">${escapeHtml(r.claim)}${r.note ? `<span class="muted">${escapeHtml(r.note)}</span>` : ""}</td>
-        ${sources.map(s => `<td>${pvMark(r.marks[s.guid])}</td>`).join("")}</tr>`).join("");
+    return `<h4 class="pv-cmp-group">${label}</h4>`
+      + rows.map(r => `<div class="pv-cmp-row">
+          <p class="pv-cmp-claim">${escapeHtml(r.claim)}${r.note ? `<span class="muted">${escapeHtml(r.note)}</span>` : ""}</p>
+          ${strip(sources.map(s => `<span class="pv-cell">${pvMark(r.marks[s.guid])}</span>`).join(""))}
+        </div>`).join("");
   }).join("");
   box.innerHTML = `
     <p class="muted">${pvGenerated()}只整理各篇「說了什麼」，不判斷誰對。</p>
@@ -471,11 +476,31 @@ function renderPvClaims() {
       <span><i class="pv-mark differ"></i>說法不同</span>
       <span><i class="pv-mark none"></i>沒提到</span>
     </div>
-    <div class="pv-table-wrap"><table class="pv-claims">
-      <thead><tr><th>主張</th>${sources.map(s => `<th title="${escapeHtml(s.title)}">${escapeHtml(pvShort(s.title))}
-        <span class="muted">${(s.published || "").slice(0, 4)}</span></th>`).join("")}</tr></thead>
-      <tbody>${body}</tbody>
-    </table></div>`;
+    <div class="pv-cmp">
+      <div class="pv-cmp-head">${strip(sources.map(s => `<span class="pv-cell pv-cell-src" title="${escapeHtml(s.title)}">
+        <span class="pv-src-title">${escapeHtml(s.title)}</span><span class="muted">${(s.published || "").slice(0, 4)}</span></span>`).join(""))}</div>
+      ${body}
+    </div>`;
+  syncStrips(box);
+}
+
+/** 讓同一張對照表裡所有的標記列一起左右滑。 */
+function syncStrips(box) {
+  const strips = [...box.querySelectorAll(".pv-strip")];
+  let leader = null; // 正在被手指滑動的那一列；其他列跟著設定，避免互相觸發
+  strips.forEach(el => {
+    const lead = () => { leader = el; };
+    el.addEventListener("touchstart", lead, { passive: true });
+    el.addEventListener("pointerdown", lead);
+    el.addEventListener("wheel", lead, { passive: true });
+    el.addEventListener("scroll", () => {
+      if (leader && leader !== el) return;
+      leader = el;
+      strips.forEach(other => {
+        if (other !== el) other.scrollLeft = el.scrollLeft;
+      });
+    }, { passive: true });
+  });
 }
 
 function pvMark(mark) {
