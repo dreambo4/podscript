@@ -1,26 +1,28 @@
-/* 淺色為預設；深色兩段（跟隨系統、手動指定）內容相同，與手機端同一套 data-theme 機制。
+/* 靛藍配色，刻意與手機端（淺色粉紫、深色薄荷綠）區隔，一眼看得出是本機版。
+   淺色為預設；深色兩段（跟隨系統、手動指定）內容相同，與手機端同一套 data-theme 機制。
+   深色的底色、卡片、線條一律用不帶色調的中性灰，只有主色是靛藍。
    深色只套用在螢幕，列印一律用淺色。 */
 :root {
   color-scheme: light;
-  --bg: #faf9f7;
+  --bg: #f0eff6;
   --card: #fff;
-  --ink: #1c1b1a;
-  --muted: #6b6864;
-  --line: #e4e1dc;
-  --line-strong: #cfcac2;
-  --accent: #2f6f4f;
+  --ink: #1a1d24;
+  --muted: #5f6570;
+  --line: #d9dbe7;
+  --line-strong: #c2c4d5;
+  --accent: #4338ca;
   --accent-ink: #fff;
-  --accent-soft: #eef3ef;
-  --accent-stripe: #6ea98a;
-  --neutral-soft: #f0eeeb;
-  --warn: #9a7b2e;
-  --danger: #a33;
-  --toast-bg: #1c1b1a;
+  --accent-soft: #ecebfa;
+  --accent-stripe: #a19ce4;
+  --neutral-soft: #eef0f3;
+  --warn: #9a6a12;
+  --danger: #b4232c;
+  --toast-bg: #1a1d24;
   --toast-ink: #fff;
-  --toast-link: #9fd3b4;
+  --toast-link: #8b93ff;
   --topbar-h: 61px;
   --sidebar-w: 340px;
-  --sidebar-bg: #f2f0ec;
+  --sidebar-bg: #e5e6f0;
 
   /* 心智圖分支色（root 為 --accent，分支 0~6 依序輪替） */
   --mm-root: var(--accent);
@@ -32,53 +34,45 @@
 @media screen and (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
     color-scheme: dark;
-    --bg: #0f1210;
-    --card: #191d1a;
-    --ink: #f1efe9;
-    --muted: #8c968c;
-    --line: #2a2f2b;
-    --line-strong: #3d443e;
-    --accent: #7fd99b;
-    --accent-ink: #0f1210;
-    --accent-soft: #20291f;
-    --accent-stripe: #4f9a68;
-    --neutral-soft: #232823;
-    --warn: #f2c14e;
-    --danger: #ff8a80;
-    --toast-bg: #f1efe9;
-    --toast-ink: #0f1210;
-    --toast-link: #2f6f4f;
-    --sidebar-bg: #141715;
-
-    --mm-ink: #1c1b1a;
-    --mm-0: #5b7a63; --mm-1: #6a7a8f; --mm-2: #8a7a94;
-    --mm-3: #9a8478; --mm-4: #7a8a6a; --mm-5: #8a9a9a; --mm-6: #7a94a0;
+    --bg: #121212;
+    --card: #1c1c1e;
+    --ink: #ececec;
+    --muted: #9a9a9e;
+    --line: #2e2e31;
+    --line-strong: #414145;
+    --accent: #8b93ff;
+    --accent-ink: #121212;
+    --accent-soft: #2e2f42;
+    --accent-stripe: #4e5283;
+    --neutral-soft: #262628;
+    --warn: #f0b84e;
+    --danger: #ff8a8a;
+    --toast-bg: #ececec;
+    --toast-ink: #121212;
+    --toast-link: #4338ca;
+    --sidebar-bg: #161617;
   }
 }
 @media screen {
   :root[data-theme="dark"] {
     color-scheme: dark;
-    --bg: #0f1210;
-    --card: #191d1a;
-    --ink: #f1efe9;
-    --muted: #8c968c;
-    --line: #2a2f2b;
-    --line-strong: #3d443e;
-    --accent: #7fd99b;
-    --accent-ink: #0f1210;
-    --accent-soft: #20291f;
-    --accent-stripe: #4f9a68;
-    --neutral-soft: #232823;
-    --warn: #f2c14e;
-    --danger: #ff8a80;
-    --toast-bg: #f1efe9;
-    --toast-ink: #0f1210;
-    --toast-link: #2f6f4f;
-    --sidebar-bg: #141715;
-
-    --mm-ink: #1c1b1a;
-    --mm-0: #5b7a63; --mm-1: #6a7a8f; --mm-2: #8a7a94;
-    --mm-3: #9a8478; --mm-4: #7a8a6a; --mm-5: #8a9a9a; --mm-6: #7a94a0;
+    --bg: #121212;
+    --card: #1c1c1e;
+    --ink: #ececec;
+    --muted: #9a9a9e;
+    --line: #2e2e31;
+    --line-strong: #414145;
+    --accent: #8b93ff;
+    --accent-ink: #121212;
+    --accent-soft: #2e2f42;
+    --accent-stripe: #4e5283;
+    --neutral-soft: #262628;
+    --warn: #f0b84e;
+    --danger: #ff8a8a;
+    --toast-bg: #ececec;
+    --toast-ink: #121212;
+    --toast-link: #4338ca;
+    --sidebar-bg: #161617;
   }
 }
 
@@ -781,9 +775,10 @@ a.seg-time:hover { color: var(--accent); text-decoration: underline; }
   background: var(--card);
 }
 .episode-list li.ep-card:hover { border-color: var(--line-strong); }
+/* 選中只加外框不換底色：淡主色底和側欄底色太接近。外加 1px 陰影讓框看起來 2px，又不推動版面 */
 .episode-list li.ep-card.selected {
   border-color: var(--accent);
-  background: var(--accent-soft);
+  box-shadow: 0 0 0 1px var(--accent);
 }
 .episode-list li.selected .ep-name { color: var(--accent); }
 

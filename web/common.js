@@ -121,9 +121,9 @@ function toggleTheme() {
   window.dispatchEvent(new Event("podscript:theme"));
 }
 
-/** markmap 的 root 節點色：深色底需要較亮的顏色（與手機端相同）。 */
+/** markmap 的 root 節點色：深色底需要較亮的顏色，用中性灰配合不帶色調的深色底。 */
 function mindmapRootColor() {
-  return isDarkMode() ? "#cbd5e1" : "#475569";
+  return isDarkMode() ? "#d4d4d8" : "#475569";
 }
 
 syncThemeButton();
