@@ -463,11 +463,13 @@ function renderPvClaims() {
     const rows = claims.rows.filter(r => !used.has(r) && test(r));
     rows.forEach(r => used.add(r));
     if (!rows.length) return "";
-    return `<h4 class="pv-cmp-group ${kind}"><span>${label}</span><span class="pv-cmp-count">${rows.length} 則</span></h4>`
+    // 每組包成一個區塊：標題只在自己的區塊內釘選，捲到下一組時由下一組的標題接替
+    return `<section class="pv-cmp-sec">
+        <h4 class="pv-cmp-group ${kind}"><span>${label}</span><span class="pv-cmp-count">${rows.length} 則</span></h4>`
       + rows.map(r => `<div class="pv-cmp-row">
           <p class="pv-cmp-claim">${escapeHtml(r.claim)}${r.note ? `<span class="muted">${escapeHtml(r.note)}</span>` : ""}</p>
           ${strip(sources.map(s => `<span class="pv-cell">${pvMark(r.marks[s.guid])}</span>`).join(""))}
-        </div>`).join("");
+        </div>`).join("") + `</section>`;
   }).join("");
   box.innerHTML = `
     <p class="muted">${pvGenerated()}只整理各篇「說了什麼」，不判斷誰對。</p>
@@ -482,7 +484,19 @@ function renderPvClaims() {
       ${body}
     </div>`;
   syncStrips(box);
+  pinGroupHeaders(box);
 }
+
+/** 分組標題釘在篇目名稱列下方；篇目名稱可能換行，高度要實際量。 */
+function pinGroupHeaders(box) {
+  const cmp = box.querySelector(".pv-cmp");
+  const head = box.querySelector(".pv-cmp-head");
+  if (!cmp || !head) return;
+  cmp.style.setProperty("--pv-head-h", `${head.offsetHeight}px`);
+}
+window.addEventListener("resize", () => {
+  if (pv && pvTab === "claims") pinGroupHeaders(document.querySelector("#pv-tab-claims"));
+});
 
 /** 讓同一張對照表裡所有的標記列一起左右滑。 */
 function syncStrips(box) {

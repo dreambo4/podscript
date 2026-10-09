@@ -1429,7 +1429,13 @@ a.seg-time { color: var(--accent); text-decoration: underline; text-underline-of
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .pv-cmp-group.single { --group-color: #ab9ff0; } }
 :root[data-theme="dark"] .pv-cmp-group.single { --group-color: #ab9ff0; }
 .pv-cmp-count { margin-left: auto; font-size: 12px; font-weight: 700; opacity: .8; letter-spacing: 0; }
-.pv-cmp-head + .pv-cmp-group { margin-top: 12px; }
+.pv-cmp-head + .pv-cmp-sec .pv-cmp-group { margin-top: 12px; }
+/* 往下捲時分組標題釘在篇目名稱列下方（--pv-head-h 由 JS 量篇目列高度） */
+.pv-cmp-group {
+  position: sticky;
+  top: calc(var(--topbar-h) + var(--subtabbar-h) + env(safe-area-inset-top) + var(--pv-head-h, 64px));
+  z-index: 2;
+}
 .pv-cmp-row { padding: 8px 0 6px; border-bottom: 1px solid var(--line); }
 .pv-cmp-claim { margin: 0 0 4px; font-size: 14px; line-height: 1.55; }
 .pv-cmp-claim .muted { display: block; font-size: 12px; }
