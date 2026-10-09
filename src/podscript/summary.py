@@ -175,6 +175,28 @@ COVER_PROMPT = """以下是一集節目（或一篇文章）的資訊：
 輸出格式（只輸出 JSON，不要任何說明文字）：
 {{""" + COVER_EXAMPLE + """}}"""
 
+# 論文翻譯：與摘要分開呼叫，按段落分批，見 translate 模組。
+# 譯文不放在命令列參數：每批數千字，一律寫檔讓 claude 讀。
+TRANSLATE_PROMPT = """請讀取 {path}，這是一篇英文學術論文的其中一部分，已切成段落，以 JSON 陣列存放。
+每個元素有 i（編號）、kind（類型）、text（原文）。
+
+請把每一段翻成繁體中文（台灣用語），以 JSON 格式輸出。
+
+翻譯規則：
+- 忠實翻譯，不摘要、不省略、不加入原文沒有的說明
+- 學術書面語氣；專有名詞與縮寫（如 VLCHP、DXA、HOMA-IR）保留原文，
+  常見術語可譯成中文後附原文，例如「靜態代謝率（REE）」，同一個詞只在第一次出現時附原文
+- 數字、單位、統計量（P < 0.05、95% CI）、引用編號（如 [12]、[3-7]）照抄不改
+- kind 為 title、h1、h2 的是標題，譯成簡短的標題，不加句號
+- kind 為 table 的是表格，每一行是一列：行數必須與原文相同，只翻譯文字（表格標題、欄名、列名），
+  數字與符號照抄，行與行之間以 \\n 分隔
+- 原文中的頁首頁尾、圖內文字或亂碼的數學式，照抄原文即可，不要硬譯
+
+輸出格式（只輸出 JSON，不要任何說明文字）：
+{{"items": [{{"i": 0, "text": "譯文"}}, {{"i": 1, "text": "譯文"}}]}}
+
+每個輸入段落都要有對應的譯文，i 照抄輸入的編號。"""
+
 # 依內容類型選用的提示；鍵對應 pipeline 的 content_kind。
 PROMPTS = {"podcast": PROMPT, "article": ARTICLE_PROMPT, "paper": PAPER_PROMPT}
 CHAPTERS_PROMPTS = {"podcast": CHAPTERS_PROMPT, "article": ARTICLE_CHAPTERS_PROMPT}
@@ -291,6 +313,21 @@ class SummaryProvider(ABC):
         """
 
 
+    @abstractmethod
+    def generate_translation(self, chunk_path: Path, *, model: str) -> dict[int, str]:
+        """翻譯一批論文段落。
+
+        Args:
+            chunk_path: JSON 陣列檔，每個元素為 {"i", "kind", "text"}。
+
+        Returns:
+            {編號: 譯文}；模型漏掉的段落不在其中。
+
+        Raises:
+            SummaryError: 生成失敗或回傳格式無法解析。
+        """
+
+
 class ClaudeCliProvider(SummaryProvider):
     """透過本機 claude CLI 生成，消耗訂閱額度。"""
 
@@ -335,6 +372,24 @@ class ClaudeCliProvider(SummaryProvider):
         if cover is None:
             raise SummaryError("模型回傳的封面格式不正確，請再試一次")
         return cover
+
+    def generate_translation(self, chunk_path: Path, *, model: str = "sonnet") -> dict[int, str]:
+        stdout = self._run(TRANSLATE_PROMPT.format(path=chunk_path), model=model)
+        try:
+            envelope = json.loads(stdout)
+        except json.JSONDecodeError as exc:
+            raise SummaryError(f"CLI 輸出非 JSON：{stdout[:200]}") from exc
+        items = _extract_json(envelope.get("result", "")).get("items")
+        if not isinstance(items, list):
+            raise SummaryError("回傳缺少 items")
+        return {
+            item["i"]: item["text"].strip()
+            for item in items
+            if isinstance(item, dict)
+            and isinstance(item.get("i"), int)
+            and isinstance(item.get("text"), str)
+            and item["text"].strip()
+        }
 
     def _run(self, prompt: str, *, model: str) -> str:
         """執行 claude CLI，回傳原始輸出。"""

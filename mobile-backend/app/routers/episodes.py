@@ -16,13 +16,15 @@ TAG_MODE_OPERATORS = {
 
 LIST_COLUMNS = """
     e.id, e.episode_guid, e.podcast_name, e.title, e.published_at, e.created_at,
-    e.duration_sec, e.hashtags, (f.episode_id is not null) as is_favorite, e.platform, e.cover
+    e.duration_sec, e.hashtags, (f.episode_id is not null) as is_favorite, e.platform, e.cover,
+    e.title_translated
 """
 
 DETAIL_COLUMNS = """
     e.id, e.episode_guid, e.podcast_name, e.title, e.published_at, e.duration_sec,
     e.summary, e.mindmap_mermaid, e.hashtags, e.transcript, e.speakers, e.provenance,
-    (f.episode_id is not null) as is_favorite, e.platform, e.source_url, e.chapters, e.cover
+    (f.episode_id is not null) as is_favorite, e.platform, e.source_url, e.chapters, e.cover,
+    e.title_translated
 """
 
 FAVORITE_JOIN = "left join favorites f on f.episode_id = e.id and f.user_id = %s"
@@ -88,6 +90,7 @@ def _row_to_summary(row: tuple) -> dict:
         "is_favorite": row[8],
         "platform": row[9],
         "cover": row[10],
+        "title_translated": row[11],
         "snippet": None,
         "match_count": 0,
     }
@@ -96,7 +99,7 @@ def _row_to_summary(row: tuple) -> dict:
 def _row_to_match(row: tuple) -> dict:
     """LIST_COLUMNS 之後接 MATCH_COLUMNS 的列；只命中標題時 snippet 為 None。"""
     item = _row_to_summary(row)
-    snippet, cut_start, cut_end, match_count = row[11:15]
+    snippet, cut_start, cut_end, match_count = row[12:16]
     if snippet:
         item["snippet"] = ("…" if cut_start else "") + snippet + ("…" if cut_end else "")
     item["match_count"] = match_count
@@ -153,13 +156,15 @@ def list_episodes(
         params.extend([pattern, "" if case_sensitive else "i"])  # MATCH_JOIN 的兩個 %s
         # pg_trgm 模糊比對：標題或攤平純文字命中皆算；like／ilike 可走 trgm 索引先篩一輪
         like = "like" if case_sensitive else "ilike"
-        where.append(f"(e.title {like} %s or e.transcript_text {like} %s)")
-        params.extend([_like_pattern(q), _like_pattern(q)])
+        where.append(
+            f"(e.title {like} %s or e.title_translated {like} %s or e.transcript_text {like} %s)"
+        )
+        params.extend([_like_pattern(q)] * 3)
         if whole_word:
             # like 只能篩出含該字串者，全字與否再以正規表示式確認
             regex = "~" if case_sensitive else "~*"
-            where.append(f"(e.title {regex} %s or m.pos > 0)")
-            params.append(pattern)
+            where.append(f"(e.title {regex} %s or e.title_translated {regex} %s or m.pos > 0)")
+            params.extend([pattern, pattern])
 
     all_tags = list(tags or [])
     if tag:
@@ -267,6 +272,7 @@ def get_episode(guid: str, user: dict = Depends(get_current_user)) -> dict:
         "source_url": row[14],
         "chapters": row[15] or [],
         "cover": row[16],
+        "title_translated": row[17],
         "projects": projects,
     }
 

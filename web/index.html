@@ -62,6 +62,9 @@
   </svg>
 
   <aside id="sidebar" class="sidebar">
+    <button id="btn-collapse-sidebar" class="sidebar-collapse" type="button" aria-label="收合清單" title="收合清單">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M13 6l-6 6 6 6M19 6l-6 6 6 6"/></svg>
+    </button>
     <section id="queue-box" class="queue-box" hidden>
       <h2>手機待處理 <span id="queue-count" class="queue-count">0</span></h2>
       <ul id="queue-list" class="queue-list"></ul>
@@ -102,6 +105,7 @@
       <div class="episode-head">
         <div>
           <h2 id="ep-title"></h2>
+          <p class="title-zh" id="ep-title-zh" hidden></p>
           <p class="muted" id="ep-meta"></p>
           <a id="ep-source" class="source-link" target="_blank" rel="noopener noreferrer" hidden></a>
         </div>
@@ -163,6 +167,13 @@
         <div class="block-head">
           <h3 id="transcript-heading">逐字稿</h3>
           <div id="speaker-controls" class="speakers"></div>
+          <div id="translate-controls" class="translate-controls" hidden>
+            <div id="lang-switch" class="lang-switch" role="group" aria-label="原文語言" hidden>
+              <button type="button" data-lang="zh">中文</button>
+              <button type="button" data-lang="en">English</button>
+            </div>
+            <button id="btn-translate" type="button">翻譯成中文</button>
+          </div>
         </div>
         <nav id="chapters" class="chapters" aria-label="章節" hidden></nav>
         <div id="transcript"></div>

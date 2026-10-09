@@ -28,6 +28,7 @@ params:query {
 
 docs {
   每筆附 platform（apple／youtube／article／paper），前端據此標示文章與論文。
+  每筆附 title_translated：論文的中文標題，未翻譯或非論文為 null，卡片顯示在原標題下方；q 也會比對這個欄位。
   每筆附 cover：{"svg": "...", "color": "#rrggbb"}，svg 為 viewBox 0 0 48 48 的內部元素（本機已過濾，前端顯示前再過濾一次）；尚未產生時為 null。
   sort：created_at／published_at
   kind：audio（音檔，YouTube、文章、論文以外的平台）／video（影片，YouTube）／article（文章）／paper（論文）；不帶則不篩選

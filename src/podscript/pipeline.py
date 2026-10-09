@@ -575,6 +575,11 @@ def _forced_stages(force: str | None) -> set[str]:
     return set(STAGES[STAGES.index(force) :])
 
 
+def save_result(directory: Path, result: Result) -> None:
+    """寫回本機的處理結果，供翻譯等只改逐字稿內容、不重跑任何階段的功能使用。"""
+    _write_outputs(directory, result)
+
+
 def _write_outputs(directory: Path, result: Result) -> None:
     """寫出供檢視與後續摘要使用的檔案。"""
     (directory / "transcript.json").write_text(

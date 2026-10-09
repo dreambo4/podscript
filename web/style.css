@@ -126,6 +126,34 @@ body {
 
 .sidebar-head h2 { margin: 0 0 10px; font-size: 14px; color: var(--muted); }
 
+/* 側欄右上角的收合按鈕；最上方可能是「手機待處理」或「單集」，固定在角落不跟著標題。
+   .sidebar 是 sticky（窄螢幕為 fixed），可作為絕對定位的基準 */
+.sidebar-collapse {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border-radius: 6px;
+  background: transparent;
+  border-color: transparent;
+  color: var(--muted);
+}
+.sidebar-collapse:hover { background: var(--card); border-color: var(--line); color: var(--ink); }
+.sidebar-collapse svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+/* 標題列讓出右上角給收合按鈕 */
+.queue-box h2, .sidebar-head h2 { padding-right: 32px; }
+
+/* 收合後：清單隱藏、內容撐滿，頂部顯示 ☰ 可再展開 */
+body.sidebar-collapsed .layout { grid-template-columns: minmax(0, 1fr); }
+body.sidebar-collapsed .sidebar { display: none; }
+body.sidebar-collapsed .icon-btn { display: block; }
+
 /* 依研究專案篩選與管理 */
 .project-filter { display: flex; gap: 6px; margin: 6px 0 4px; }
 .project-filter select {
@@ -343,6 +371,17 @@ button:disabled { opacity: .5; cursor: default; }
 }
 
 .block-head h3 { margin: 0; font-size: 15px; }
+
+.title-zh { margin: 0 0 4px; font-size: 14px; color: var(--muted); }
+
+/* 論文原文：翻譯按鈕與中英切換 */
+.translate-controls { display: flex; align-items: center; gap: 8px; }
+.translate-controls[hidden], .lang-switch[hidden] { display: none; }
+.lang-switch { display: inline-flex; }
+.lang-switch button { border-radius: 0; font-size: 13px; }
+.lang-switch button:first-child { border-radius: 8px 0 0 8px; }
+.lang-switch button:last-child { border-radius: 0 8px 8px 0; margin-left: -1px; }
+.lang-switch button.on { background: var(--accent); border-color: var(--accent); color: #fff; }
 
 /* 封面：淡色底＋同色系線條插圖，與手機列表卡片相同；svg 已由後端過濾 */
 .cover-row { display: flex; align-items: center; gap: 16px; }
@@ -713,6 +752,18 @@ a.seg-time:hover { color: var(--accent); text-decoration: underline; }
   overflow: hidden;
 }
 
+/* 論文的中文標題：原標題下方的小字 */
+.ep-name-zh {
+  display: block;
+  margin-bottom: 2px;
+  font-size: 12px;
+  color: var(--muted);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
 .ep-meta { display: block; font-size: 12px; color: var(--muted); }
 .ep-meta .nowrap { white-space: nowrap; }
 .kind-icon { display: inline-block; width: 12px; height: 12px; margin-right: 4px; vertical-align: -1px; }
@@ -785,6 +836,8 @@ dialog button.primary { background: var(--accent); border-color: var(--accent); 
   }
 
   .sidebar.open { transform: none; }
+  /* 窄螢幕是抽屜式，收合狀態不套用，按鈕改為關閉抽屜 */
+  body.sidebar-collapsed .sidebar { display: block; }
   #content { padding: 16px; }
 
   .block-head { align-items: flex-start; }

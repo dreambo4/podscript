@@ -23,7 +23,7 @@ from fastapi.responses import FileResponse, HTMLResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from . import audio, notify, pipeline, projects, storage, upload
+from . import audio, notify, pipeline, projects, storage, translate, upload
 from .resolvers import ResolveError, article, is_media_url, paper, platform_of, resolve
 from .summary import SummaryError
 
@@ -458,6 +458,7 @@ def _episode_summary(
     return {
         "guid": guid,
         "title": episode.title if episode else (job.title if job else guid),
+        "title_translated": episode.title_translated if episode else "",
         "podcast_name": episode.podcast_name if episode else "",
         "published_at": episode.to_dict()["published_at"] if episode else None,
         "created_at": job.started_at if job else "",
@@ -702,6 +703,7 @@ def upload_episode(guid: str) -> dict:
     上傳成功代表這集已完成，對應的待處理項目一併結案；
     手機端的待處理清單因此不需使用者手動清掉。
     """
+    _reject_while_translating(guid, "上傳")
     try:
         result = upload.upload(_episode_dir(guid))
     except upload.UploadError as exc:
@@ -718,6 +720,7 @@ def delete_episode(guid: str) -> dict:
     job = _read_job(guid)
     if job is not None and not job.done:
         raise HTTPException(status_code=409, detail="這集正在處理中，請等處理結束再刪除")
+    _reject_while_translating(guid, "刪除")
 
     try:
         result = upload.delete_episode(directory)
@@ -745,6 +748,92 @@ def get_audio(guid: str) -> FileResponse:
     if not path.exists():
         raise HTTPException(status_code=404, detail="找不到音檔")
     return FileResponse(path, media_type="audio/mpeg")
+
+
+# ── 論文翻譯 ────────────────────────────────────────
+# 翻譯約需數分鐘，在背景執行；進度只存在記憶體。服務重啟時背景執行緒也會中斷，
+# 但每批完成就已存檔，重按一次「翻譯」只會補上沒翻到的段落。
+
+_translations: dict[str, dict] = {}
+
+
+@app.post("/api/episodes/{guid}/translate")
+def start_translate(guid: str, force: bool = False) -> dict:
+    """在背景把論文翻成中文；已有譯文的段落略過，force 時全部重翻。"""
+    result, _summary, from_db = _load_episode(guid)
+    if not pipeline.is_paper(result.episode):
+        raise HTTPException(status_code=400, detail="只有論文可以翻譯")
+
+    with _lock:
+        status = _translations.get(guid)
+        if status and status["running"]:
+            return status
+        total = translate.pending_count(result, force=force)
+        if total == 0 and result.episode.title_translated and not force:
+            raise HTTPException(status_code=400, detail="已經全部翻譯完成")
+        status = {"running": True, "done": 0, "total": 0, "translated": 0, "error": ""}
+        _translations[guid] = status
+
+    thread = threading.Thread(
+        target=_run_translate, args=(guid, result, from_db, force, status), daemon=True
+    )
+    thread.start()
+    return status
+
+
+@app.get("/api/episodes/{guid}/translate")
+def get_translate_status(guid: str) -> dict:
+    """翻譯進度；沒有進行中或剛結束的翻譯時 running 為 false、total 為 0。"""
+    return _translations.get(
+        guid, {"running": False, "done": 0, "total": 0, "translated": 0, "error": ""}
+    )
+
+
+def _reject_while_translating(guid: str, action: str) -> None:
+    """翻譯進行中不可上傳或刪除：本機目錄會被清除，翻譯結束時又把檔案寫回來。"""
+    status = _translations.get(guid)
+    if status and status["running"]:
+        raise HTTPException(status_code=409, detail=f"這集正在翻譯，請等翻譯結束再{action}")
+
+
+def _run_translate(
+    guid: str, result: pipeline.Result, from_db: bool, force: bool, status: dict
+) -> None:
+    """背景翻譯並存檔。部分批次失敗時已翻好的仍寫入，錯誤訊息留給前端顯示。"""
+    directory = _episode_dir(guid)
+
+    def on_progress(done: int, total: int) -> None:
+        status["done"], status["total"] = done, total
+
+    uploaded = bool(upload.uploaded_at(guid))
+
+    def save() -> None:
+        """每批完成就存：本機有檔案（尚未上傳或待重新上傳）寫本機；已上傳的同時寫回資料庫。"""
+        if not from_db:
+            pipeline.save_result(directory, result)
+        if uploaded:
+            upload.update_episode(guid, result=result)
+
+    try:
+        status["translated"] = translate.translate(
+            result,
+            directory / "translate-tmp",
+            force=force,
+            on_progress=on_progress,
+            on_batch=save,
+        )
+    except translate.TranslateError as exc:
+        status["error"] = str(exc)
+    except upload.UploadError as exc:
+        status["error"] = f"譯文寫回資料庫失敗：{exc}"
+    except Exception as exc:  # 背景執行緒需攔下所有例外，否則錯誤不會傳到前端
+        status["error"] = str(exc) or exc.__class__.__name__
+        traceback.print_exc()
+    finally:
+        # 已上傳的論文本機原本沒有目錄，翻譯暫存目錄刪除後不留空目錄
+        if from_db and directory.exists() and not any(directory.iterdir()):
+            directory.rmdir()
+        status["running"] = False
 
 
 # ── 研究專案 ────────────────────────────────────────

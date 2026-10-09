@@ -29,6 +29,7 @@ class Episode:
         duration_sec: 音檔長度（秒）。RSS 未提供時為 None。
         published_at: 發布時間。RSS 未提供時為 None。
         description: 節目簡介原文，含 HTML 標記與贊助商段落。
+        title_translated: 標題的中文譯文（論文翻譯後才有），列表顯示在原標題下方。
     """
 
     platform: str
@@ -40,6 +41,7 @@ class Episode:
     duration_sec: int | None = None
     published_at: datetime | None = None
     description: str = ""
+    title_translated: str = ""
 
     def to_dict(self) -> dict[str, Any]:
         d = asdict(self)

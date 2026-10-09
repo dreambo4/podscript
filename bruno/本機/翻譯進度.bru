@@ -1,0 +1,17 @@
+meta {
+  name: 翻譯進度
+  type: http
+  seq: 27
+}
+
+get {
+  url: {{localBase}}/api/episodes/{{guid}}/translate
+  body: none
+  auth: none
+}
+
+docs {
+  論文翻譯進度 {"running", "done", "total", "translated", "error"}：done／total 為已完成／總批數，
+  translated 為這次補上譯文的段落數。部分批次失敗時 error 有訊息，已翻好的仍已存檔。
+  進度只存在記憶體，服務重啟後回 {"running": false, "total": 0}。
+}

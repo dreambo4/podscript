@@ -339,6 +339,7 @@ function renderEpisodeCard(ep) {
       ${coverHtml(ep)}
       <div class="ep-body">
         <span class="ep-title">${escapeHtml(ep.title)}</span>
+        ${ep.title_translated ? `<span class="ep-title-zh">${escapeHtml(ep.title_translated)}</span>` : ""}
         <span class="ep-meta">${kindIconHtml(ep)}${escapeHtml(ep.podcast_name)}${date ? " · " + date.slice(0, 10) : ""}${ep.duration_sec ? " · " + formatDuration(ep.duration_sec) : ""}</span>
         ${snippetHtml(ep)}
         <span class="tags">${cardTagsHtml(ep.hashtags)}</span>
@@ -1416,7 +1417,7 @@ function renderTranscript(ep, query = "", options = {}) {
   const paper = isPaper(ep);
   const segments = ep.transcript || [];
   const speakers = ep.speakers || {};
-  const chapters = ep.chapters || [];
+  const chapters = localizedChapters(ep);
   const startsAt = chapterStarts(segments, chapters, article);
   // 每章包成一個 section：標題 sticky 只在所屬 section 內固定，捲到下一章時被推走。
   const html = [];
@@ -1438,7 +1439,7 @@ function renderTranscript(ep, query = "", options = {}) {
     // 論文的章標題就是章節標題，上面已顯示，不重複
     if (paper && index !== undefined && seg.kind === "h1") return;
     if (paper) {
-      html.push(paperSegmentHtml(seg, highlightHtml(seg.text, query, options)));
+      html.push(paperSegmentHtml(seg, highlightHtml(segmentText(seg), query, options)));
       return;
     }
     // 文章只有段落，沒有時間與說話者
@@ -1495,10 +1496,49 @@ function chapterStarts(segments, chapters, article) {
   return bySegment;
 }
 
+// ── 論文翻譯 ──────────────────────────────────────
+// 有譯文時原文預設顯示中文，可切回英文；沒有譯文的段落（參考文獻等）顯示原文。
+let transcriptLang = "zh";
+
+function hasTranslation(ep) {
+  return (ep?.transcript || []).some(s => s.translation);
+}
+
+function segmentText(seg) {
+  return transcriptLang === "zh" && seg.translation ? seg.translation : seg.text;
+}
+
+/** 章節標題跟著語言切換：論文章節即章標題，譯文在該段的 translation。 */
+function localizedChapters(ep) {
+  const chapters = ep.chapters || [];
+  if (!isPaper(ep) || transcriptLang !== "zh") return chapters;
+  return chapters.map(c => {
+    const seg = (ep.transcript || [])[c.paragraph];
+    return seg?.translation ? { ...c, title: seg.translation } : c;
+  });
+}
+
+function renderLangSwitch(ep) {
+  const el = document.querySelector("#lang-switch");
+  el.hidden = !(isPaper(ep) && hasTranslation(ep));
+  el.querySelectorAll("button").forEach(b => b.classList.toggle("on", b.dataset.lang === transcriptLang));
+}
+
+document.querySelector("#lang-switch").addEventListener("click", e => {
+  const lang = e.target.closest("button")?.dataset.lang;
+  if (!lang || lang === transcriptLang || !detailEp) return;
+  transcriptLang = lang;
+  renderLangSwitch(detailEp);
+  // 切換語言時取消搜尋標亮，命中處在另一種語言裡未必存在
+  document.querySelector("#hit-nav").hidden = true;
+  hitMarks = [];
+  renderTranscript(detailEp);
+});
+
 /** 逐字稿上方的章節目錄；沒有章節時不顯示。 */
 function renderChapters(ep) {
   const el = document.querySelector("#chapters");
-  const chapters = ep.chapters || [];
+  const chapters = localizedChapters(ep);
   el.hidden = !chapters.length;
   if (el.hidden) {
     el.innerHTML = "";
@@ -1533,6 +1573,18 @@ let hitIndex = 0;
 function showHits(ep, query, options) {
   renderTranscript(ep, query, options);
   hitMarks = [...document.querySelectorAll("#transcript mark")];
+  // 論文的關鍵字可能只出現在另一種語言（如用英文搜尋、預設顯示中文），換過去再找一次
+  if (!hitMarks.length && query && isPaper(ep) && hasTranslation(ep)) {
+    transcriptLang = transcriptLang === "zh" ? "en" : "zh";
+    renderLangSwitch(ep);
+    renderTranscript(ep, query, options);
+    hitMarks = [...document.querySelectorAll("#transcript mark")];
+    if (!hitMarks.length) {
+      transcriptLang = transcriptLang === "zh" ? "en" : "zh";
+      renderLangSwitch(ep);
+      renderTranscript(ep, query, options);
+    }
+  }
   const bar = document.querySelector("#hit-nav");
   bar.hidden = hitMarks.length === 0;
   if (!hitMarks.length) return false; // 只命中標題：維持一般顯示
@@ -1647,6 +1699,11 @@ async function loadDetail(guid, query = "", options = {}) {
   detailEp = ep;
 
   document.querySelector("#ep-title").textContent = ep.title;
+  const titleZh = document.querySelector("#ep-title-zh");
+  titleZh.textContent = ep.title_translated || "";
+  titleZh.hidden = !ep.title_translated;
+  transcriptLang = "zh"; // 每次開單集都回到預設的中文
+  renderLangSwitch(ep);
   document.querySelector("#ep-meta").textContent =
     `${ep.podcast_name}${ep.published_at ? " · " + ep.published_at.slice(0, 10) : ""}${ep.duration_sec ? " · " + formatDuration(ep.duration_sec) : ""}`;
   renderSourceLink(ep);

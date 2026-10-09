@@ -32,6 +32,10 @@ create table if not exists episodes (
 -- start 等於 transcript 中某一段的 start，前端以此定位段落；文章與舊集數為空陣列。
 alter table episodes add column if not exists chapters jsonb not null default '[]'::jsonb;
 
+-- 論文標題的中文譯文（2026-10-09 新增）：列表顯示在原標題下方。
+-- 逐段譯文存在 transcript 每一段的 translation，不另開欄位。
+alter table episodes add column if not exists title_translated text;
+
 -- 內容封面（2026-10-07 新增）：摘要模型依內容畫的線條插圖，不含文字。
 -- svg 只含白名單內的繪圖元素，線條與填色一律 currentColor，由前端依 color 上色；舊集數為 null。
 alter table episodes add column if not exists cover jsonb;

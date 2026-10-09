@@ -20,6 +20,7 @@ docs {
   table（表格，每列以換行分隔，第一行為表格標題）、ref（一筆參考文獻）；一般段落沒有 kind。
   summary.chapters 取自論文的章標題（格式同文章）；summary.meta 為模型讀出的書目資料
   {"title", "journal", "first_author", "published"}，其餘內容為 null。
+  翻譯後 segments 每段多 translation（中文譯文，參考文獻沒有），episode.title_translated 為中文標題；未翻譯時為空字串。
   summary.chapters 為章節目錄：Podcast 為 [{"start": 秒數, "title": "..."}]，start 等於 segments 中某一段的 start；
   文章與論文為 [{"paragraph": 段落索引, "title": "..."}]，索引從 0 起算。尚未產生章節時為空陣列。
   needs_reupload：已上傳但本機有重新生成的內容尚未再次上傳（本機有 result.json）；

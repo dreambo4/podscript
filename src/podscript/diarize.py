@@ -41,6 +41,8 @@ class DiarizedSegment:
     confidence: float
     # 論文段落的類型（章節標題、表格、參考文獻），見 resolvers.paper；其餘內容為空字串
     kind: str = ""
+    # 論文段落的中文譯文，見 translate 模組；未翻譯為空字串
+    translation: str = ""
 
     def to_dict(self) -> dict:
         data = {
@@ -53,6 +55,8 @@ class DiarizedSegment:
         # 只有論文才寫入，既有逐字稿與文章的資料格式不變
         if self.kind:
             data["kind"] = self.kind
+        if self.translation:
+            data["translation"] = self.translation
         return data
 
 

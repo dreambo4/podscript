@@ -236,12 +236,16 @@ async function showEpisode(guid) {
   const data = await api(`/api/episodes/${guid}`);
   // 回應到達前使用者已切到別集：丟棄，否則舊集會蓋掉新集的畫面。
   if (location.hash.slice(1) !== guid) return;
+  // 換到另一集時原文回到預設的中文
+  if (current?.guid !== guid) transcriptLang = "zh";
   current = { guid, ...data };
 
   $("empty").hidden = true;
   $("progress").hidden = true;
   $("episode").hidden = false;
   $("ep-title").textContent = data.episode.title;
+  $("ep-title-zh").textContent = data.episode.title_translated || "";
+  $("ep-title-zh").hidden = !data.episode.title_translated;
   renderUploadState();
 
   const text = isText(data.episode);
@@ -250,6 +254,8 @@ async function showEpisode(guid) {
 
   renderSummary(data.summary);
   renderEpisodeProjects();
+  renderTranslateControls();
+  if (isPaper(data.episode)) watchTranslation(guid);
   if (text) $("speaker-controls").innerHTML = "";
   else renderSpeakers(data);
   renderTranscript(data);
@@ -452,7 +458,7 @@ function renderTranscript(data) {
   renderChapters(data);
   const article = isText(data.episode);
   const paper = isPaper(data.episode);
-  const chapters = data.summary?.chapters || [];
+  const chapters = localizedChapters(data);
   const startsAt = chapterStarts(data.segments, chapters, article);
   // 每章包成一個 section：標題 sticky 只在所屬 section 內固定，捲到下一章時被推走。
   const html = [];
@@ -471,7 +477,7 @@ function renderTranscript(data) {
     }
     // 論文的章標題就是章節標題，上面已顯示，不重複
     if (paper && index !== undefined && s.kind === "h1") return;
-    html.push(paper ? paperSegmentHtml(s) : article ? `<p>${escapeHtml(s.text)}</p>` : segmentHtml(data, s));
+    html.push(paper ? paperSegmentHtml(s, segmentText(s)) : article ? `<p>${escapeHtml(s.text)}</p>` : segmentHtml(data, s));
   });
   if (chapters.length) html.push("</section>");
   $("transcript").innerHTML = article
@@ -491,13 +497,109 @@ function paperTableHtml(rows) {
   }`;
 }
 
-/** 論文段落依類型顯示：章節標題、表格（每列一行）、參考文獻。 */
-function paperSegmentHtml(s) {
-  if (s.kind === "h1") return `<h4 class="paper-heading">${escapeHtml(s.text)}</h4>`;
-  if (s.kind === "h2") return `<h5 class="paper-subheading">${escapeHtml(s.text)}</h5>`;
-  if (s.kind === "table") return paperTableHtml(s.text.split("\n").map(escapeHtml));
-  if (s.kind === "ref") return `<p class="paper-ref">${escapeHtml(s.text)}</p>`;
-  return `<p>${escapeHtml(s.text)}</p>`;
+/** 論文段落依類型顯示：章節標題、表格（每列一行）、參考文獻。text 為目前語言的文字。 */
+function paperSegmentHtml(s, text) {
+  if (s.kind === "h1") return `<h4 class="paper-heading">${escapeHtml(text)}</h4>`;
+  if (s.kind === "h2") return `<h5 class="paper-subheading">${escapeHtml(text)}</h5>`;
+  if (s.kind === "table") return paperTableHtml(text.split("\n").map(escapeHtml));
+  if (s.kind === "ref") return `<p class="paper-ref">${escapeHtml(text)}</p>`;
+  return `<p>${escapeHtml(text)}</p>`;
+}
+
+// ── 論文翻譯 ────────────────────────────────────────
+// 有譯文時原文預設顯示中文，可切回英文；沒有譯文的段落（參考文獻、未翻到的）顯示原文。
+
+let transcriptLang = "zh";
+
+function hasTranslation(data) {
+  return (data?.segments || []).some((s) => s.translation);
+}
+
+/** 目前語言下這一段要顯示的文字。 */
+function segmentText(s) {
+  return transcriptLang === "zh" && s.translation ? s.translation : s.text;
+}
+
+/** 章節標題跟著語言切換：論文章節即章標題，譯文在該段的 translation。 */
+function localizedChapters(data) {
+  const chapters = data.summary?.chapters || [];
+  if (!isPaper(data.episode) || transcriptLang !== "zh") return chapters;
+  return chapters.map((c) => {
+    const seg = data.segments[c.paragraph];
+    return seg?.translation ? { ...c, title: seg.translation } : c;
+  });
+}
+
+function renderTranslateControls() {
+  const paper = isPaper(current.episode);
+  $("translate-controls").hidden = !paper;
+  if (!paper) return;
+  const translated = hasTranslation(current);
+  $("lang-switch").hidden = !translated;
+  $("lang-switch").querySelectorAll("button").forEach((b) => {
+    b.classList.toggle("on", b.dataset.lang === transcriptLang);
+  });
+  const status = translationStatus.get(current.guid);
+  const btn = $("btn-translate");
+  btn.disabled = Boolean(status?.running);
+  btn.textContent = status?.running
+    ? `翻譯中 ${status.done}／${status.total || "…"}`
+    : translated
+      ? "補翻／重新翻譯"
+      : "翻譯成中文";
+  btn.title = translated ? "補上沒翻到的段落；按住 Shift 點擊則全部重新翻譯" : "以 Sonnet 翻譯全文，約需數分鐘";
+}
+
+$("lang-switch").addEventListener("click", (e) => {
+  const lang = e.target.closest("button")?.dataset.lang;
+  if (!lang || lang === transcriptLang) return;
+  transcriptLang = lang;
+  renderTranslateControls();
+  renderTranscript(current);
+});
+
+// 各集的翻譯進度；翻譯在背景跑，切到別集再回來仍看得到進度
+const translationStatus = new Map();
+const translationTimers = new Map();
+
+$("btn-translate").addEventListener("click", async (e) => {
+  const guid = current.guid;
+  const force = e.shiftKey;
+  if (force && !confirm("全部重新翻譯？已有的譯文會被覆蓋。")) return;
+  try {
+    const status = await api(`/api/episodes/${guid}/translate${force ? "?force=true" : ""}`, { method: "POST" });
+    translationStatus.set(guid, status);
+    renderTranslateControls();
+    watchTranslation(guid);
+  } catch (err) {
+    alert(err.message);
+  }
+});
+
+/** 追蹤翻譯進度，結束時重新載入這一集並顯示譯文。 */
+async function watchTranslation(guid) {
+  clearTimeout(translationTimers.get(guid));
+  let status;
+  try {
+    status = await api(`/api/episodes/${guid}/translate`);
+  } catch {
+    return;
+  }
+  const wasRunning = translationStatus.get(guid)?.running;
+  translationStatus.set(guid, status);
+  if (current?.guid === guid) renderTranslateControls();
+
+  if (status.running) {
+    translationTimers.set(guid, setTimeout(() => watchTranslation(guid), 5000));
+    return;
+  }
+  if (!wasRunning) return; // 開啟單集時查到的舊狀態，不重複提示
+  if (status.error) alert(status.error);
+  if (current?.guid === guid) {
+    transcriptLang = "zh";
+    await showEpisode(guid);
+  }
+  await loadLibrary();
 }
 
 /**
@@ -535,7 +637,7 @@ function segmentHtml(data, s) {
 /** 逐字稿上方的章節目錄；沒有章節時（含文章）不顯示。 */
 function renderChapters(data) {
   const el = $("chapters");
-  const chapters = data.summary?.chapters || [];
+  const chapters = localizedChapters(data);
   el.hidden = !chapters.length;
   if (el.hidden) return;
 
@@ -835,13 +937,17 @@ function downloadMarkdown(parts) {
   const startsAt = chapterStarts(d.segments, chapters, isText(d.episode));
   const heading = (i) => (startsAt.has(i) ? [`### ${chapters[startsAt.get(i)].title}`, ""] : []);
   if (parts.includes("transcript") && isPaper(d.episode)) {
+    // 依目前顯示的語言輸出
+    const zhChapters = localizedChapters(d);
+    const paperHeading = (i) => (startsAt.has(i) ? [`### ${zhChapters[startsAt.get(i)].title}`, ""] : []);
     lines.push("## 原文", "");
     d.segments.forEach((s, i) => {
-      if (startsAt.has(i) && s.kind === "h1") return lines.push(...heading(i));
-      if (s.kind === "h1") return lines.push(`### ${s.text}`, "");
-      if (s.kind === "h2") return lines.push(`#### ${s.text}`, "");
-      if (s.kind === "table") return lines.push("```", s.text, "```", "");
-      lines.push(...heading(i), s.text, "");
+      const text = segmentText(s);
+      if (startsAt.has(i) && s.kind === "h1") return lines.push(...paperHeading(i));
+      if (s.kind === "h1") return lines.push(`### ${text}`, "");
+      if (s.kind === "h2") return lines.push(`#### ${text}`, "");
+      if (s.kind === "table") return lines.push("```", text, "```", "");
+      lines.push(...paperHeading(i), text, "");
     });
   } else if (parts.includes("transcript") && isArticle(d.episode)) {
     lines.push("## 原文", "");
@@ -1153,8 +1259,33 @@ function renderProjectManager() {
 
 // ── 側邊欄（窄螢幕） ────────────────────────────────
 
+// 寬螢幕：清單常駐左側，可收合讓內容撐滿；窄螢幕：清單是抽屜，☰ 開關
+const NARROW = window.matchMedia("(max-width: 800px)");
+const SIDEBAR_COLLAPSED_KEY = "podscript_sidebar_collapsed";
+
+function setSidebarCollapsed(collapsed) {
+  document.body.classList.toggle("sidebar-collapsed", collapsed);
+  try {
+    localStorage.setItem(SIDEBAR_COLLAPSED_KEY, collapsed ? "1" : "");
+  } catch {
+    // 無法記住時只影響重新整理後的狀態
+  }
+}
+
+try {
+  if (localStorage.getItem(SIDEBAR_COLLAPSED_KEY)) document.body.classList.add("sidebar-collapsed");
+} catch {
+  // 讀不到就維持展開
+}
+
 $("btn-menu").addEventListener("click", () => {
-  $("sidebar").classList.toggle("open");
+  if (NARROW.matches) $("sidebar").classList.toggle("open");
+  else setSidebarCollapsed(false);
+});
+
+$("btn-collapse-sidebar").addEventListener("click", () => {
+  if (NARROW.matches) closeSidebar();
+  else setSidebarCollapsed(true);
 });
 
 function closeSidebar() {
@@ -1210,6 +1341,7 @@ function episodeRow(e, selected) {
     ${listCoverHtml(e)}
     <div class="ep-body">
       <span class="ep-name">${escapeHtml(e.title)}</span>
+      ${e.title_translated ? `<span class="ep-name-zh">${escapeHtml(e.title_translated)}</span>` : ""}
       ${meta ? `<span class="ep-meta"><svg class="kind-icon" role="img" aria-label="${label}"><use href="#${icon}"/></svg>${meta}</span>` : ""}
       ${status}
       ${tags ? `<span class="ep-tags">${tags}</span>` : ""}

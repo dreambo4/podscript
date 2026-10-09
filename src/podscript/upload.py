@@ -29,11 +29,12 @@ UPSERT_SQL = """
 insert into episodes (
     platform, source_url, episode_guid, podcast_name, title,
     published_at, duration_sec, summary, mindmap_mermaid, hashtags,
-    transcript, speakers, provenance, transcript_text, chapters, cover
+    transcript, speakers, provenance, transcript_text, chapters, cover, title_translated
 ) values (
     %(platform)s, %(source_url)s, %(episode_guid)s, %(podcast_name)s, %(title)s,
     %(published_at)s, %(duration_sec)s, %(summary)s, %(mindmap_mermaid)s, %(hashtags)s,
-    %(transcript)s, %(speakers)s, %(provenance)s, %(transcript_text)s, %(chapters)s, %(cover)s
+    %(transcript)s, %(speakers)s, %(provenance)s, %(transcript_text)s, %(chapters)s, %(cover)s,
+    %(title_translated)s
 )
 on conflict (episode_guid) do update set
     source_url      = excluded.source_url,
@@ -51,6 +52,7 @@ on conflict (episode_guid) do update set
     chapters        = excluded.chapters,
     -- 這次沒有封面（模型畫壞被過濾、或功能上線前的舊摘要檔）時保留原本的，不覆蓋成空值
     cover           = coalesce(excluded.cover, episodes.cover),
+    title_translated = excluded.title_translated,
     updated_at      = now()
 returning id, (xmax = 0) as inserted
 """
@@ -223,19 +225,30 @@ def build_payload(directory: Path) -> dict:
         "transcript": json.dumps(segments, ensure_ascii=False),
         "speakers": json.dumps(result.speakers, ensure_ascii=False),
         "provenance": json.dumps(result.provenance.to_dict(), ensure_ascii=False),
-        # jsonb 無法建 trgm 索引，另存攤平的純文字供中文搜尋；文章與論文保留段落分隔
-        "transcript_text": ("\n" if pipeline.is_text(episode) else "").join(
-            seg.text for seg in result.segments
-        ),
+        "transcript_text": transcript_text_of(result),
+        "title_translated": episode.title_translated or None,
         "chapters": json.dumps(summary.get("chapters") or [], ensure_ascii=False),
         "cover": json.dumps(summary["cover"], ensure_ascii=False) if summary.get("cover") else None,
     }
 
 
+def transcript_text_of(result: pipeline.Result) -> str:
+    """攤平的純文字，供手機以 pg_trgm 搜尋內文（jsonb 無法建 trgm 索引）。
+
+    文章與論文保留段落分隔；論文有譯文時接在原文之後，中文關鍵字也搜得到。
+    """
+    if not pipeline.is_text(result.episode):
+        return "".join(seg.text for seg in result.segments)
+    parts = [seg.text for seg in result.segments]
+    parts += [seg.translation for seg in result.segments if seg.translation]
+    return "\n".join(parts)
+
+
 FETCH_COLUMNS = """
     platform, source_url, episode_guid, podcast_name, title,
     published_at, duration_sec, summary, mindmap_mermaid, hashtags,
-    transcript, speakers, provenance, chapters, cover, updated_at, created_at
+    transcript, speakers, provenance, chapters, cover, title_translated,
+    updated_at, created_at
 """
 
 
@@ -287,7 +300,7 @@ def fetch_all() -> list[tuple[pipeline.Result, dict, str, str]]:
     items = []
     for row in rows:
         result, summary = _row_to_result(row)
-        items.append((result, summary, _iso(row[15]), _iso(row[16])))
+        items.append((result, summary, _iso(row[-2]), _iso(row[-1])))
     return items
 
 
@@ -300,7 +313,7 @@ def _row_to_result(row: tuple) -> tuple[pipeline.Result, dict]:
     (
         platform, source_url, episode_guid, podcast_name, title,
         published_at, duration_sec, summary, mindmap, hashtags,
-        transcript, speakers, provenance, chapters, cover, *_timestamps,
+        transcript, speakers, provenance, chapters, cover, title_translated, *_timestamps,
     ) = row
 
     episode = Episode(
@@ -312,6 +325,7 @@ def _row_to_result(row: tuple) -> tuple[pipeline.Result, dict]:
         mp3_url="",
         duration_sec=duration_sec,
         published_at=published_at,
+        title_translated=title_translated or "",
     )
     result = pipeline.Result(
         episode=episode,
@@ -351,11 +365,15 @@ def update_episode(
     transcript_text: str | None = None,
     chapters: list[dict] | None = None,
     cover: dict | None = None,
+    result: pipeline.Result | None = None,
 ) -> None:
     """更新已上傳單集的指定欄位。
 
     改說話者名稱與重新生成摘要在上傳後直接寫回資料庫，
     不需要本機檔案，手機端因此也能改。
+
+    Args:
+        result: 論文翻譯後傳入，寫回 transcript（含逐段譯文）、transcript_text 與中文標題。
 
     Raises:
         UploadError: 未設定 DATABASE_URL 或寫入失敗。
@@ -377,6 +395,18 @@ def update_episode(
     if cover is not None:
         sets.append("cover = %(cover)s")
         params["cover"] = json.dumps(cover, ensure_ascii=False)
+    if result is not None:
+        # 論文翻譯後寫回：逐段譯文在 transcript，搜尋用的純文字與中文標題一併更新
+        sets += [
+            "transcript = %(transcript)s",
+            "transcript_text = %(full_text)s",
+            "title_translated = %(title_translated)s",
+        ]
+        params |= {
+            "transcript": json.dumps([s.to_dict() for s in result.segments], ensure_ascii=False),
+            "full_text": transcript_text_of(result),
+            "title_translated": result.episode.title_translated or None,
+        }
     if summary is not None:
         sets += [
             "summary = %(summary)s",

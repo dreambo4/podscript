@@ -36,7 +36,7 @@
 <meta name="twitter:description" content="Podcast 逐字稿工具：分角色逐字稿、摘要、心智圖">
 <meta name="twitter:image" content="icons/og-image.png">
 
-<link rel="stylesheet" href="style.css?v=90b84f2f2d41">
+<link rel="stylesheet" href="style.css?v=861f1c1c6a83">
 <script src="config.js"></script>
 </head>
 <body>
@@ -294,6 +294,7 @@
     <div class="detail-hero">
       <div>
         <h2 id="ep-title"></h2>
+        <p class="title-zh" id="ep-title-zh" hidden></p>
         <p class="muted" id="ep-meta"></p>
         <a id="ep-source" class="source-link" target="_blank" rel="noopener noreferrer" hidden>
           <svg class="icon icon-xs"><use href="#ic-external"/></svg><span></span>
@@ -329,6 +330,10 @@
 
     <div class="subpanel" id="sub-transcript">
       <div class="block">
+        <div id="lang-switch" class="lang-switch" role="group" aria-label="原文語言" hidden>
+          <button type="button" data-lang="zh">中文</button>
+          <button type="button" data-lang="en">English</button>
+        </div>
         <nav id="chapters" class="chapters" aria-label="章節" hidden></nav>
         <div id="transcript"></div>
       </div>
@@ -452,7 +457,7 @@
   // markmap 從 CDN 載入，可能晚於詳情頁資料到達；通知 app.js 補畫。
   window.dispatchEvent(new Event("markmap-ready"));
 </script>
-<script src="app.js?v=280ec48462e0"></script>
+<script src="app.js?v=c6b99d082fcd"></script>
 <script src="https://accounts.google.com/gsi/client" async defer onload="initGoogleSignIn()"></script>
 </body>
 </html>

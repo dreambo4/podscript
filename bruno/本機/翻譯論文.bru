@@ -1,0 +1,26 @@
+meta {
+  name: 翻譯論文
+  type: http
+  seq: 26
+}
+
+post {
+  url: {{localBase}}/api/episodes/{{guid}}/translate
+  body: none
+  auth: none
+}
+
+params:query {
+  ~force: true
+}
+
+docs {
+  在背景把論文全文翻成繁體中文，立即回傳進度 {"running", "done", "total", "translated", "error"}；
+  進度用「翻譯進度」查詢。模型為 .env 的 TRANSLATE_MODEL（預設 sonnet），與摘要分開呼叫。
+  依段落分批（每批約 8000 字元）、同時送 3 批；參考文獻不翻；每批完成就存檔，中斷後再呼叫只補沒翻到的段落。
+  force=true：已有譯文的段落也全部重翻。
+  譯文存在 segments 每段的 translation，標題譯文存在 episode.title_translated；
+  尚未上傳的寫本機，已上傳的同時寫回資料庫（transcript、transcript_text、title_translated），不需再次上傳。
+  不是論文回 400；全部已翻譯完成（且未帶 force）回 400；同一篇已在翻譯中則回傳目前進度。
+  翻譯進行中，上傳與刪除這一篇會回 409。
+}

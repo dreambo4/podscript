@@ -14,5 +14,6 @@ docs {
   把單集寫入資料庫 episodes（以 episode_guid upsert），成功後清除本機目錄。
   論文會先把本機的 PDF 原檔（source.pdf）上傳到 Storage 的 papers bucket，失敗時回 400 且不寫資料庫；
   已上傳過、本機沒有 PDF 的論文（再次上傳）略過這一步。
+  論文翻譯進行中回 409。
   標籤合併尚未確認、尚未處理完成或資料庫寫入失敗回 400。
 }

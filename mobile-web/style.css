@@ -469,6 +469,8 @@ body {
 
 .ep-body { flex: 1; min-width: 0; }
 .ep-title { display: block; font-weight: 700; font-size: 14px; line-height: 1.5; margin-bottom: 4px; padding-right: 26px; }
+/* 論文的中文標題：原標題下方的小字 */
+.ep-title-zh { display: block; font-size: 12px; line-height: 1.5; color: var(--muted); margin: -2px 0 4px; padding-right: 26px; }
 .ep-meta { display: block; font-size: 12px; color: var(--muted); margin-bottom: 6px; }
 .ep-kind-icon { display: inline-block; margin-right: 4px; vertical-align: -1px; }
 
@@ -847,6 +849,13 @@ html.scrubbing #detail-view .chapter-title { position: static; }
   border-bottom: 1px solid var(--line);
 }
 .detail-hero h2 { margin: 0 0 4px; font-size: 18px; font-weight: 800; line-height: 1.4; }
+.title-zh { margin: 0 0 4px; font-size: 14px; line-height: 1.5; color: var(--muted); }
+
+/* 論文原文的中英切換 */
+.lang-switch { display: inline-flex; margin-bottom: 12px; border: 1px solid var(--line); border-radius: 999px; overflow: hidden; }
+.lang-switch[hidden] { display: none; }
+.lang-switch button { padding: 6px 14px; border: none; background: var(--card); color: var(--muted); font: inherit; font-size: 13px; }
+.lang-switch button.on { background: var(--accent); color: var(--accent-ink); font-weight: 700; }
 .heart-toggle { flex: none; }
 
 .subtabbar {

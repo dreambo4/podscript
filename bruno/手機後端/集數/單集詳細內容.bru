@@ -15,7 +15,8 @@ docs {
   cover：內容封面 {"svg": "...", "color": "#rrggbb"}，svg 為 viewBox 0 0 48 48 的內部元素；尚未產生時為 null。
   文章的 transcript 每筆是一段正文（start／end 為 0、speaker 為空字串），前端顯示為「原文」。
   論文同文章，transcript 每筆另有 kind：h1（章標題）、h2（節標題）、table（表格，每列一行）、ref（參考文獻）；
-  一般段落沒有 kind。podcast_name 為期刊名稱（讀不到時為「第一作者 et al.」）。
+  一般段落沒有 kind。翻譯後每段多 translation（中文譯文，參考文獻沒有），title_translated 為中文標題（未翻譯為 null）；
+  前端原文預設顯示中文，可切換英文。podcast_name 為期刊名稱（讀不到時為「第一作者 et al.」）。
   source_url：原始網址，前端僅在 https 開頭時顯示為連結；
   YouTube 集數另以此網址加上 t=<秒>s 做逐字稿時間戳跳轉。
   chapters：章節目錄。Podcast 為 [{"start": 秒數, "title": "..."}]，start 等於 transcript 中某一段的 start；
