@@ -159,6 +159,38 @@ whisper 模型轉錄時整份載入記憶體，且 Metal 緩衝區無法換出�
 - 修改前端資源後、部署前執行 `python3 scripts/stamp-assets.py` 更新快取版本號。
 - 登入採 Google OAuth，白名單存於 `users` 資料表。
 
+### Telegram 分享加入待處理
+
+在 Podcast App 按分享 → Telegram → 選 bot 的私聊，網址就會加入待處理，bot 回覆結果。
+只寫入待處理清單，不觸發轉錄；本機服務不必開著，回家再手動處理。
+沿用本機推播的同一個 bot，只接受 `TELEGRAM_CHAT_ID` 那個聊天室的訊息。
+
+| 傳給 bot 的內容 | 加入為 |
+|---|---|
+| 網址（可夾帶短文字） | 網址項目，網址以外的文字存成備註 |
+| 超過 200 字的文字 | 文章全文。超過 4096 字時 Telegram 會拆成幾則送出，15 秒內接著來的會併成同一篇；連續貼兩篇要隔一下 |
+| `.txt`／`.md` 檔 | 文章全文（須為 UTF-8） |
+| PDF 檔 | 論文，上限 20 MB（Telegram bot 下載上限），更大的請用本機網頁上傳 |
+
+全文與 PDF 暫存在 `queue` 表，本機上傳該篇後隨項目刪除。
+需要先執行 `supabase/schema.sql` 最後一段（待處理加入全文與 PDF）再部署後端。
+
+設定（一次即可）：
+
+1. Railway Variables 加上 `TELEGRAM_WEBHOOK_SECRET`（自訂隨機字串，只能用 `A-Z a-z 0-9 _ -`）。
+   bot token 與 chat id 會從資料庫 `app_settings` 讀，不必重填。
+2. 部署後把 bot 指到 Railway：
+
+   ```bash
+   curl -sS "https://api.telegram.org/bot<TELEGRAM_BOT_TOKEN>/setWebhook" \
+     -d url=https://<railway 網域>/api/telegram/webhook \
+     -d secret_token=<TELEGRAM_WEBHOOK_SECRET> \
+     -d allowed_updates='["message"]'
+   ```
+
+   確認：`curl -sS "https://api.telegram.org/bot<TELEGRAM_BOT_TOKEN>/getWebhookInfo"`
+3. 在 Telegram 把 bot 的私聊置頂，分享選單才會一直排在前面。
+
 ## 目錄結構
 
 ```

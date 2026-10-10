@@ -1,5 +1,8 @@
 """待處理佇列：手機端貼上網址暫存，回家在本機端處理。
 
+kind 為 url 以外的（全文 text、PDF）只能從 Telegram 分享入口加入，見 routers/telegram.py；
+內容存在 content／pdf 欄位，清單 API 不回傳，由本機端處理時再讀。
+
 手機端不解析網址，只檢查是否為合法的 http(s) 網址；支援哪些平台由本機端 resolver 判斷。
 節目名稱與單集標題由本機端解析後回填，因此入列時只有 url。
 """
@@ -35,7 +38,8 @@ class QueueIn(BaseModel):
 
 class QueueOut(BaseModel):
     id: str
-    url: str
+    kind: str
+    url: str | None
     episode_guid: str | None
     title: str | None
     note: str | None
@@ -48,18 +52,19 @@ class QueueOut(BaseModel):
 def _row_to_item(row: tuple) -> dict:
     return {
         "id": str(row[0]),
-        "url": row[1],
-        "episode_guid": row[2],
-        "title": row[3],
-        "note": row[4],
-        "status": row[5],
-        "created_at": row[6].isoformat() if row[6] else None,
-        "processed_at": row[7].isoformat() if row[7] else None,
-        "project_ids": [str(p) for p in (row[8] or [])],
+        "kind": row[1],
+        "url": row[2],
+        "episode_guid": row[3],
+        "title": row[4],
+        "note": row[5],
+        "status": row[6],
+        "created_at": row[7].isoformat() if row[7] else None,
+        "processed_at": row[8].isoformat() if row[8] else None,
+        "project_ids": [str(p) for p in (row[9] or [])],
     }
 
 
-COLUMNS = "id, url, episode_guid, title, note, status, created_at, processed_at, project_ids"
+COLUMNS = "id, kind, url, episode_guid, title, note, status, created_at, processed_at, project_ids"
 
 
 def _validate_url(url: str) -> str:
@@ -100,6 +105,45 @@ def _validate_note(note: str | None) -> str | None:
     return note
 
 
+def insert_item(cur, url: str, note: str | None, added_by: str | None, project_ids: list[str]) -> tuple[tuple, bool]:
+    """寫入一筆待處理；網址與備註須先經 _validate_url／_validate_note。
+
+    Telegram 分享入口（routers/telegram.py）共用此函式，重複判斷與手機網頁一致。
+    呼叫端負責 commit。
+
+    Returns:
+        (資料列, 是否為新增)；同網址已有 pending 時回傳既有那筆與 False。
+
+    Raises:
+        HTTPException: 409，這集已經處理過。
+    """
+    # 已處理過的單集不必再排一次，直接擋下並說明原因。
+    cur.execute("select title from episodes where source_url = %s", (url,))
+    existing = cur.fetchone()
+    if existing:
+        raise HTTPException(status_code=409, detail=f"這集已經處理過了：{existing[0]}")
+
+    # queue_url_pending_idx 保證同一網址只有一筆 pending；
+    # 重複貼上時回傳既有那筆，讓前端當成成功而非錯誤。
+    cur.execute(
+        f"insert into queue (url, note, added_by, project_ids) values (%s, %s, %s, %s::uuid[])"
+        f" on conflict do nothing returning {COLUMNS}",
+        (url, note, added_by, project_ids),
+    )
+    row = cur.fetchone()
+    if row is not None:
+        return row, True
+
+    # 重複貼上時把這次選的專案併進既有那筆，不覆蓋先前選的
+    cur.execute(
+        "update queue set project_ids ="
+        " array(select distinct unnest(project_ids || %s::uuid[]))"
+        f" where url = %s and status = 'pending' returning {COLUMNS}",
+        (project_ids, url),
+    )
+    return cur.fetchone(), False
+
+
 @router.post("/queue", response_model=QueueOut, status_code=201, summary="貼上網址加入待處理")
 def add_to_queue(body: QueueIn, user: dict = Depends(get_current_user)) -> dict:
     url = _validate_url(body.url)
@@ -107,30 +151,7 @@ def add_to_queue(body: QueueIn, user: dict = Depends(get_current_user)) -> dict:
 
     with get_connection() as conn:
         with conn.cursor() as cur:
-            # 已處理過的單集不必再排一次，直接擋下並說明原因。
-            cur.execute("select title from episodes where source_url = %s", (url,))
-            existing = cur.fetchone()
-            if existing:
-                raise HTTPException(status_code=409, detail=f"這集已經處理過了：{existing[0]}")
-
-            # queue_url_pending_idx 保證同一網址只有一筆 pending；
-            # 重複貼上時回傳既有那筆，讓前端當成成功而非錯誤。
-            project_ids = [str(p) for p in body.project_ids]
-            cur.execute(
-                f"insert into queue (url, note, added_by, project_ids) values (%s, %s, %s, %s::uuid[])"
-                f" on conflict do nothing returning {COLUMNS}",
-                (url, note, user["id"], project_ids),
-            )
-            row = cur.fetchone()
-            if row is None:
-                # 重複貼上時把這次選的專案併進既有那筆，不覆蓋先前選的
-                cur.execute(
-                    "update queue set project_ids ="
-                    " array(select distinct unnest(project_ids || %s::uuid[]))"
-                    f" where url = %s and status = 'pending' returning {COLUMNS}",
-                    (project_ids, url),
-                )
-                row = cur.fetchone()
+            row, _ = insert_item(cur, url, note, user["id"], [str(p) for p in body.project_ids])
             conn.commit()
 
     return _row_to_item(row)
