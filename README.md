@@ -159,6 +159,29 @@ whisper 模型轉錄時整份載入記憶體，且 Metal 緩衝區無法換出�
 - 修改前端資源後、部署前執行 `python3 scripts/stamp-assets.py` 更新快取版本號。
 - 登入採 Google OAuth，白名單存於 `users` 資料表。
 
+### Telegram 分享加入待處理
+
+在 Podcast App 按分享 → Telegram → 選 bot 的私聊，網址就會加入待處理，bot 回覆結果。
+只寫入待處理清單，不觸發轉錄；本機服務不必開著，回家再手動處理。
+沿用本機推播的同一個 bot，只接受 `TELEGRAM_CHAT_ID` 那個聊天室的訊息。
+訊息中網址以外的文字（分享時帶的標題）會存成備註。
+
+設定（一次即可）：
+
+1. Railway Variables 加上 `TELEGRAM_WEBHOOK_SECRET`（自訂隨機字串，只能用 `A-Z a-z 0-9 _ -`）。
+   bot token 與 chat id 會從資料庫 `app_settings` 讀，不必重填。
+2. 部署後把 bot 指到 Railway：
+
+   ```bash
+   curl -sS "https://api.telegram.org/bot<TELEGRAM_BOT_TOKEN>/setWebhook" \
+     -d url=https://<railway 網域>/api/telegram/webhook \
+     -d secret_token=<TELEGRAM_WEBHOOK_SECRET> \
+     -d allowed_updates='["message"]'
+   ```
+
+   確認：`curl -sS "https://api.telegram.org/bot<TELEGRAM_BOT_TOKEN>/getWebhookInfo"`
+3. 在 Telegram 把 bot 的私聊置頂，分享選單才會一直排在前面。
+
 ## 目錄結構
 
 ```

@@ -7,7 +7,7 @@ load_dotenv()
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from .routers import auth, episodes, projects, queue
+from .routers import auth, episodes, projects, queue, telegram
 
 app = FastAPI(title="podscript mobile API")
 
@@ -29,6 +29,7 @@ app.include_router(auth.router, prefix="/api")
 app.include_router(episodes.router, prefix="/api")
 app.include_router(queue.router, prefix="/api")
 app.include_router(projects.router, prefix="/api")
+app.include_router(telegram.router, prefix="/api")
 
 
 @app.get("/")

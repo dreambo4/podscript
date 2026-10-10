@@ -1,0 +1,32 @@
+meta {
+  name: Telegram 分享
+  type: http
+  seq: 4
+}
+
+post {
+  url: {{mobileBase}}/api/telegram/webhook
+  body: json
+  auth: none
+}
+
+headers {
+  X-Telegram-Bot-Api-Secret-Token: {{telegramWebhookSecret}}
+}
+
+body:json {
+  {
+    "update_id": 1,
+    "message": {
+      "message_id": 1,
+      "chat": { "id": 0 },
+      "text": "https://podcasts.apple.com/tw/podcast/..."
+    }
+  }
+}
+
+docs {
+  模擬 Telegram 送來的 update。chat.id 須等於 TELEGRAM_CHAT_ID，否則靜默忽略。
+  結果以 bot 回覆訊息呈現，HTTP 一律回 200（讓 Telegram 不重送）。
+  403：secret 不符；404：後端未設定 TELEGRAM_WEBHOOK_SECRET。
+}
