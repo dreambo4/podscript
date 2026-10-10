@@ -247,17 +247,28 @@ async def start_paper(request: Request, filename: str = "", project_ids: str = "
     PDF 原檔先存在本機，按「上傳」時才存到 Storage，見 upload.upload。
     """
     data = await request.body()
+    return await run_in_threadpool(
+        _start_paper, data, filename, [p for p in project_ids.split(",") if p]
+    )
+
+
+def _start_paper(
+    data: bytes, filename: str, project_ids: list[str], queue_id: str | None = None
+) -> dict:
     if not data:
         raise HTTPException(status_code=400, detail="沒有收到檔案")
     if len(data) > MAX_PDF_BYTES:
         raise HTTPException(status_code=400, detail="PDF 超過 50 MB，無法上傳")
 
     try:
-        parsed = await run_in_threadpool(paper.from_pdf, data, filename=filename)
+        parsed = paper.from_pdf(data, filename=filename)
     except ResolveError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     guid = parsed.episode.episode_guid
+    if queue_id:
+        upload.annotate_queue_item(queue_id, episode_guid=guid, title=parsed.episode.title)
+
     with _lock:
         running = _jobs.get(guid)
         if running and not running.done:
@@ -266,7 +277,7 @@ async def start_paper(request: Request, filename: str = "", project_ids: str = "
             guid=guid,
             title=parsed.episode.title,
             kind="paper",
-            project_ids=[p for p in project_ids.split(",") if p],
+            project_ids=project_ids,
         )
         job.save()
         # 先存 PDF：排隊期間服務重啟時，接續處理（_resume_task）要靠這份檔案
@@ -583,6 +594,27 @@ def _resume_task(guid: str, previous: Job) -> Task | None:
 def list_queue() -> list[dict]:
     """手機端貼上的待處理網址。實際下載與轉錄由使用者手動觸發。"""
     return upload.fetch_queue()
+
+
+@app.post("/api/queue/{item_id}/process")
+def process_queue_item(item_id: str) -> dict:
+    """處理 Telegram 傳來的全文或 PDF（網址項目走 /api/process）。
+
+    內容存在 queue 表，清單 API 不帶，這裡才讀出來交給一般的文章／論文流程。
+    """
+    try:
+        item = upload.fetch_queue_payload(item_id)
+    except upload.UploadError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    if item["kind"] == "text":
+        return start_process(
+            ProcessRequest(text=item["content"], queue_id=item_id, project_ids=item["project_ids"])
+        )
+    if item["kind"] == "pdf":
+        # 第一次處理前 title 是 Telegram 上的檔名；之後會被回填成論文標題，只當備用
+        return _start_paper(item["pdf"], item["title"] or "", item["project_ids"], item_id)
+    raise HTTPException(status_code=400, detail="網址項目請用 /api/process")
 
 
 @app.delete("/api/queue/{item_id}")

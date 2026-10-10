@@ -194,3 +194,22 @@ alter table project_insights enable row level security;
 -- 手機待處理：存網址時選的研究專案（可多選），本機處理完成後歸入（2026-10-09）
 -- 不設外鍵：陣列無法設外鍵；專案已刪除時，歸入時略過
 alter table queue add column if not exists project_ids uuid[] not null default '{}';
+
+-- 待處理加入全文與 PDF（2026-10-10）：只能從 Telegram 分享入口加入，見 mobile-backend/app/routers/telegram.py
+-- kind=text 的全文存 content；kind=pdf 的原檔暫存 pdf（Telegram 下載上限 20 MB），
+-- 本機上傳該篇後整列刪除（resolve_queue_item），不長期佔用資料庫空間。
+-- 這兩種沒有網址，url 改為可空；queue_url_pending_idx 對 null 不判重複，不受影響。
+alter table queue add column if not exists kind text not null default 'url'
+  check (kind in ('url', 'text', 'pdf'));
+alter table queue add column if not exists content text;
+alter table queue add column if not exists pdf bytea;
+alter table queue alter column url drop not null;
+alter table queue drop constraint if exists queue_url_check;
+alter table queue add constraint queue_url_check
+  check (url is null or (url <> '' and length(url) <= 2048));
+alter table queue drop constraint if exists queue_kind_payload_check;
+alter table queue add constraint queue_kind_payload_check check (
+  (kind = 'url' and url is not null)
+  or (kind = 'text' and content is not null)
+  or (kind = 'pdf' and pdf is not null)
+);

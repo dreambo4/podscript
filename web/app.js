@@ -1056,6 +1056,8 @@ let allEpisodes = [];
 // null 代表尚未載入；loadLibrary 先於 loadQueue 完成時據此跳過重畫，
 // 避免整區先隱藏再出現的閃動。
 let queueItems = null;
+// 非網址的待處理項目（由 Telegram 加入）在清單上標明類型
+const QUEUE_KIND_LABELS = { text: "Telegram 傳來的全文", pdf: "Telegram 傳來的 PDF" };
 
 async function loadQueue() {
   try {
@@ -1093,7 +1095,8 @@ function renderQueue() {
     const li = document.createElement("li");
     li.innerHTML = `
       <div class="queue-item-body">
-        <span class="queue-item-title">${escapeHtml(item.title || item.url)}</span>
+        <span class="queue-item-title">${escapeHtml(item.title || item.url || "")}</span>
+        ${QUEUE_KIND_LABELS[item.kind] ? `<span class="queue-item-note">${QUEUE_KIND_LABELS[item.kind]}</span>` : ""}
         ${item.note ? `<span class="queue-item-note">${escapeHtml(item.note)}</span>` : ""}
         ${queueProjectsHtml(item)}
         ${processing ? `<span class="queue-item-status">${
@@ -1131,10 +1134,13 @@ function renderQueue() {
       try {
         // 帶 queue_id 讓後端回填解析出的標題；結案在上傳成功時才做。
         // 手機存網址時選的專案一併帶入，處理完成後歸入。
-        const job = await api("/api/process", {
-          method: "POST",
-          body: { url: item.url, queue_id: item.id, project_ids: item.project_ids || [] },
-        });
+        // Telegram 傳來的全文與 PDF 沒有網址，內容由後端從待處理項目讀出
+        const job = item.kind === "text" || item.kind === "pdf"
+          ? await api(`/api/queue/${item.id}/process`, { method: "POST" })
+          : await api("/api/process", {
+              method: "POST",
+              body: { url: item.url, queue_id: item.id, project_ids: item.project_ids || [] },
+            });
         location.hash = job.guid;
         await Promise.all([loadLibrary(), loadQueue()]);
       } catch (err) {

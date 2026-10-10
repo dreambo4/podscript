@@ -566,7 +566,7 @@ def fetch_queue() -> list[dict]:
         with psycopg.connect(url, connect_timeout=CONNECT_TIMEOUT) as conn:
             with conn.cursor() as cur:
                 cur.execute(
-                    "select id, url, episode_guid, title, note, created_at, project_ids"
+                    "select id, url, episode_guid, title, note, created_at, project_ids, kind"
                     " from queue where status = 'pending' order by created_at desc"
                 )
                 rows = cur.fetchall()
@@ -583,9 +583,43 @@ def fetch_queue() -> list[dict]:
             "created_at": _iso(row[5]),
             # 手機存網址時選的研究專案，本機處理完成後歸入
             "project_ids": [str(p) for p in (row[6] or [])],
+            # url 以外的（全文 text、PDF）由 Telegram 加入，內容用 fetch_queue_payload 另外讀
+            "kind": row[7],
         }
         for row in rows
     ]
+
+
+def fetch_queue_payload(item_id: str) -> dict:
+    """讀出待處理項目的內容（全文或 PDF 原檔）；清單不帶，避免每次列表都搬 PDF。
+
+    Raises:
+        UploadError: 未設定資料庫、查詢失敗或查無此項目。
+    """
+    url = os.environ.get("DATABASE_URL")
+    if not url:
+        raise UploadError("未設定 DATABASE_URL")
+
+    try:
+        with psycopg.connect(url, connect_timeout=CONNECT_TIMEOUT) as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "select kind, content, pdf, title, project_ids from queue where id = %s",
+                    (item_id,),
+                )
+                row = cur.fetchone()
+    except psycopg.Error as exc:
+        raise UploadError(f"讀取待處理項目失敗：{exc}") from exc
+
+    if row is None:
+        raise UploadError("查無此待處理項目，可能已處理完成")
+    return {
+        "kind": row[0],
+        "content": row[1],
+        "pdf": bytes(row[2]) if row[2] is not None else None,
+        "title": row[3],
+        "project_ids": [str(p) for p in (row[4] or [])],
+    }
 
 
 def annotate_queue_item(item_id: str, *, episode_guid: str, title: str) -> None:

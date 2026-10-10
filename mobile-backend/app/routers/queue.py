@@ -1,5 +1,8 @@
 """待處理佇列：手機端貼上網址暫存，回家在本機端處理。
 
+kind 為 url 以外的（全文 text、PDF）只能從 Telegram 分享入口加入，見 routers/telegram.py；
+內容存在 content／pdf 欄位，清單 API 不回傳，由本機端處理時再讀。
+
 手機端不解析網址，只檢查是否為合法的 http(s) 網址；支援哪些平台由本機端 resolver 判斷。
 節目名稱與單集標題由本機端解析後回填，因此入列時只有 url。
 """
@@ -35,7 +38,8 @@ class QueueIn(BaseModel):
 
 class QueueOut(BaseModel):
     id: str
-    url: str
+    kind: str
+    url: str | None
     episode_guid: str | None
     title: str | None
     note: str | None
@@ -48,18 +52,19 @@ class QueueOut(BaseModel):
 def _row_to_item(row: tuple) -> dict:
     return {
         "id": str(row[0]),
-        "url": row[1],
-        "episode_guid": row[2],
-        "title": row[3],
-        "note": row[4],
-        "status": row[5],
-        "created_at": row[6].isoformat() if row[6] else None,
-        "processed_at": row[7].isoformat() if row[7] else None,
-        "project_ids": [str(p) for p in (row[8] or [])],
+        "kind": row[1],
+        "url": row[2],
+        "episode_guid": row[3],
+        "title": row[4],
+        "note": row[5],
+        "status": row[6],
+        "created_at": row[7].isoformat() if row[7] else None,
+        "processed_at": row[8].isoformat() if row[8] else None,
+        "project_ids": [str(p) for p in (row[9] or [])],
     }
 
 
-COLUMNS = "id, url, episode_guid, title, note, status, created_at, processed_at, project_ids"
+COLUMNS = "id, kind, url, episode_guid, title, note, status, created_at, processed_at, project_ids"
 
 
 def _validate_url(url: str) -> str:
